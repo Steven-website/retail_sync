@@ -1,0 +1,14 @@
+[
+    {
+        "usuario":"steven",
+        "password":"123",
+        "rol":"MASTER",
+        "filtro":"ALL"
+    },
+    {
+        "usuario":"luis",
+        "password":"123",
+        "rol":"ADC",
+        "filtro":"Escolar"
+    }
+]
