@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-import io
 from data_manager import (
     obtener_actividades,
     dataset_actividad,
     filtrar_por_familias,
-    actualizar_desde_excel,
+    actualizar_desde_csv,
+    a_csv,
 )
 
 def adc_view():
@@ -21,6 +21,7 @@ def adc_view():
         st.warning("No hay actividades disponibles.")
         return
 
+    # Paso 1: Seleccionar actividad
     ac = st.selectbox("Seleccione actividad", actividades)
 
     df = dataset_actividad(ac)
@@ -28,57 +29,54 @@ def adc_view():
         st.warning("La actividad no tiene datos.")
         return
 
+    # Filtrar por familias del ADC
     df_filtrado = filtrar_por_familias(df, familias)
     if df_filtrado.empty:
         st.warning("No hay artículos para sus familias en esta actividad.")
         return
 
-    st.caption(f"Registros: {len(df_filtrado):,}")
+    st.caption(f"Registros de sus familias: {len(df_filtrado):,}")
     st.dataframe(df_filtrado, use_container_width=True, height=400)
     st.divider()
 
-    # ── Descargar Excel filtrado por familias ──
-    buf = io.BytesIO()
-    df_filtrado.to_excel(buf, index=False, engine="xlsxwriter")
-    buf.seek(0)
-
+    # Paso 2: Descargar CSV para trabajar offline
     st.download_button(
-        "⬇️ Descargar Excel de mis familias",
-        data=buf.getvalue(),
-        file_name=f"{ac}_ADC.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "⬇️ Descargar CSV para trabajar",
+        data=a_csv(df_filtrado),
+        file_name=f"{ac}_ADC.csv",
+        mime="text/csv"
     )
 
     st.divider()
 
-    # ── Subir y actualizar ──
+    # Paso 3: Subir CSV trabajado y actualizar
     st.subheader("📤 Subir archivo trabajado")
-    st.caption("Solo se actualizan sus familias. El resto no se toca.")
+    st.caption("Solo se actualizan sus familias. El resto permanece intacto.")
 
     if "upload_key" not in st.session_state:
         st.session_state.upload_key = 0
 
     archivo = st.file_uploader(
-        "Seleccione Excel trabajado",
-        type=["xlsx"],
+        "Seleccione CSV trabajado",
+        type=["csv"],
         key=f"uploader_{st.session_state.upload_key}"
     )
 
     if archivo:
         try:
-            preview = pd.read_excel(archivo)
+            preview = pd.read_csv(archivo)
             st.caption(f"Vista previa: {len(preview):,} filas")
             st.dataframe(preview.head(5), use_container_width=True)
             archivo.seek(0)
         except Exception:
             pass
 
-        if st.button("✅ Actualizar"):
+        if st.button("✅ Actualizar BASE"):
             try:
-                with st.spinner("Actualizando..."):
-                    base_excel = pd.read_excel(archivo)
-                    actualizar_desde_excel(ac, base_excel, familias)
-                st.success("✔ Actualización aplicada correctamente.")
+                with st.spinner("Aplicando cambios..."):
+                    datos = pd.read_csv(archivo)
+                    actualizar_desde_csv(ac, datos, familias)
+                st.success("✔ BASE actualizada correctamente.")
                 st.session_state.upload_key += 1
                 st.rerun()
             except Exception as e:
