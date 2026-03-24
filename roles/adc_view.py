@@ -8,6 +8,23 @@ from data_manager import (
     a_csv,
 )
 
+def _leer_csv(archivo) -> pd.DataFrame:
+    """Lee CSV manejando comas dentro de campos y distintas codificaciones."""
+    for encoding in ["utf-8-sig", "utf-8", "latin-1"]:
+        try:
+            archivo.seek(0)
+            return pd.read_csv(
+                archivo,
+                encoding=encoding,
+                sep=",",
+                quotechar='"',
+                quoting=0,        # QUOTE_MINIMAL — respeta comillas dobles
+                on_bad_lines="skip"
+            )
+        except Exception:
+            continue
+    raise Exception("No se pudo leer el CSV. Verifique que el archivo no esté corrupto.")
+
 def adc_view():
     st.header("🧑‍💻 Panel ADC")
 
@@ -29,7 +46,6 @@ def adc_view():
         st.warning("La actividad no tiene datos.")
         return
 
-    # Filtrar por familias del ADC
     df_filtrado = filtrar_por_familias(df, familias)
     if df_filtrado.empty:
         st.warning("No hay artículos para sus familias en esta actividad.")
@@ -64,17 +80,17 @@ def adc_view():
 
     if archivo:
         try:
-            preview = pd.read_csv(archivo)
+            preview = _leer_csv(archivo)
             st.caption(f"Vista previa: {len(preview):,} filas")
             st.dataframe(preview.head(5), use_container_width=True)
-            archivo.seek(0)
-        except Exception:
-            pass
+        except Exception as e:
+            st.error(f"❌ No se pudo leer el archivo: {e}")
+            return
 
         if st.button("✅ Actualizar BASE"):
             try:
                 with st.spinner("Aplicando cambios..."):
-                    datos = pd.read_csv(archivo)
+                    datos = _leer_csv(archivo)
                     actualizar_desde_csv(ac, datos, familias)
                 st.success("✔ BASE actualizada correctamente.")
                 st.session_state.upload_key += 1
