@@ -2,9 +2,14 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import io
 
 st.set_page_config(layout="wide")
 st.title("🛒 Retail Sync")
+
+# =========================
+# CONFIG
+# =========================
 
 RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 RUTA_MASTER = "data/master.parquet"
@@ -23,7 +28,22 @@ COLUMNAS_COMERCIALES = [
     "COMENTARIO"
 ]
 
-# ================= LOGIN =================
+# =========================
+# FUNCION EXCEL
+# =========================
+
+def df_to_excel(df):
+
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="BASE")
+
+    return output.getvalue()
+
+# =========================
+# LOGIN
+# =========================
 
 if "login" not in st.session_state:
     st.session_state.login = False
@@ -49,10 +69,12 @@ if not st.session_state.login:
 
 rol = st.session_state.rol
 
-st.sidebar.success(st.session_state.usuario)
-st.sidebar.info(rol)
+st.sidebar.success(f"Usuario: {st.session_state.usuario}")
+st.sidebar.info(f"Rol: {rol}")
 
-# ================= BD =================
+# =========================
+# BD UNIVERSO
+# =========================
 
 def cargar_bd():
 
@@ -68,8 +90,9 @@ def cargar_bd():
 
     return df
 
-
-# ================= MASTER =================
+# =========================
+# MASTER
+# =========================
 
 def crear_master():
 
@@ -99,8 +122,9 @@ def cargar_master():
 
     return master
 
-
-# ================= ACTUALIZAR =================
+# =========================
+# ACTUALIZAR MASTER
+# =========================
 
 def actualizar_master():
 
@@ -124,7 +148,6 @@ def actualizar_master():
         nuevo = bd.copy()
         nuevo.insert(1, "ACTIVIDAD_COMERCIAL", ac)
 
-        # merge tolerante
         if PK in base_ac.columns:
 
             cols_usuario = [PK] + [c for c in COLUMNAS_COMERCIALES if c in base_ac.columns]
@@ -139,8 +162,9 @@ def actualizar_master():
         master = pd.concat(nuevo_master)
         master.to_parquet(RUTA_MASTER, index=False)
 
-
-# ================= CONSOLIDAR =================
+# =========================
+# CONSOLIDAR
+# =========================
 
 def consolidar(ac):
 
@@ -168,14 +192,17 @@ def consolidar(ac):
 
         st.success("Cambios aplicados")
 
-
-# ================= EJECUCION =================
+# =========================
+# EJECUCION
+# =========================
 
 actualizar_master()
 
 master = cargar_master()
 
-# ================= MASTER =================
+# =========================
+# ROL MASTER
+# =========================
 
 if rol == "MASTER":
 
@@ -214,18 +241,20 @@ if rol == "MASTER":
         st.dataframe(df)
 
         st.download_button(
-            "Descargar AC",
+            "⬇️ Descargar AC Parquet",
             df.to_parquet(index=False),
             file_name=f"{ac}.parquet"
         )
 
     st.download_button(
-        "Descargar MASTER TOTAL",
+        "⬇️ Descargar MASTER TOTAL",
         master.to_parquet(index=False),
         file_name="MASTER.parquet"
     )
 
-# ================= USUARIOS =================
+# =========================
+# ROLES USUARIO
+# =========================
 
 else:
 
@@ -242,10 +271,12 @@ else:
 
     df = master[master["ACTIVIDAD_COMERCIAL"] == ac]
 
+    excel_file = df_to_excel(df)
+
     st.download_button(
-        "Descargar Base",
-        df.to_parquet(index=False),
-        file_name=f"{ac}.parquet"
+        "⬇️ Descargar Base Excel",
+        excel_file,
+        file_name=f"{ac}.xlsx"
     )
 
     if rol in ["ADC","JEFE_ADC"]:
