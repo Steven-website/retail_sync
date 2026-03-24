@@ -1,23 +1,26 @@
 import streamlit as st
-import pandas as pd
+from io import BytesIO
 
-from data_manager import *
-from config import *
+from data_manager import (
+    obtener_actividades,
+    consolidar,
+    dataset_actividad
+)
 
 
 def marketing_view():
 
-    st.header("📢 ROL MARKETING")
+    st.header("📢 Rol MARKETING")
 
+    # ===============================
+    # ACTIVIDADES
+    # ===============================
     actividades = obtener_actividades()
 
     if not actividades:
         st.warning("No existen actividades")
         return
 
-    # ===============================
-    # SELECCIONAR ACTIVIDAD
-    # ===============================
     ac = st.selectbox(
         "Seleccione actividad",
         actividades
@@ -26,21 +29,38 @@ def marketing_view():
     # ===============================
     # CONSOLIDAR
     # ===============================
-    if st.button("Consolidar"):
+    if st.button("🔄 Consolidar actividad"):
 
-        df = consolidar(ac)
-        st.success("Actividad consolidada")
+        with st.spinner("Consolidando actividad..."):
+            df = consolidar(ac)
 
     else:
         df = dataset_actividad(ac)
 
-    st.dataframe(df, width="stretch")
+    # ===============================
+    # VALIDAR DATA
+    # ===============================
+    if df is None or df.empty:
+        st.warning("Actividad sin datos")
+        return
+
+    st.subheader(f"Vista MARKETING — {ac}")
+    st.caption(f"Registros: {len(df):,}")
+
+    st.dataframe(df, use_container_width=True)
+
+    st.divider()
 
     # ===============================
-    # DESCARGAR
+    # DESCARGAR EXCEL REAL
     # ===============================
+    buffer = BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+
     st.download_button(
-        "⬇ Descargar Excel consolidado",
-        data=df.to_csv(index=False).encode(),
-        file_name=f"{ac}_MARKETING.csv"
+        label="⬇ Descargar Excel",
+        data=buffer,
+        file_name=f"{ac}_MARKETING.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
