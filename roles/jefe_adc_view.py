@@ -2,41 +2,23 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-from data_manager import dataset_actividad, obtener_actividades, consolidar
-
-
-# ===============================
-# NORMALIZAR TEXTO
-# ===============================
-def normalizar(txt):
-
-    if txt is None:
-        return ""
-
-    return (
-        str(txt)
-        .upper()
-        .strip()
-        .replace("Á","A")
-        .replace("É","E")
-        .replace("Í","I")
-        .replace("Ó","O")
-        .replace("Ú","U")
-    )
+from data_manager import (
+    dataset_actividad,
+    obtener_actividades,
+    consolidar,
+    filtrar_familias
+)
 
 
 def jefe_adc_view():
 
     st.header("🧠 Rol JEFE ADC")
 
-    # ===============================
-    # VALIDAR SESSION
-    # ===============================
-    if "familias" not in st.session_state:
+    familias_usuario = st.session_state.familias
+
+    if not familias_usuario:
         st.error("Usuario sin familias asignadas")
         return
-
-    familias_usuario = [normalizar(x) for x in st.session_state.familias]
 
     # ===============================
     # ACTIVIDADES
@@ -58,48 +40,54 @@ def jefe_adc_view():
     if st.button("🔄 Consolidar actividad"):
 
         try:
-            consolidar(ac)
+            with st.spinner("Consolidando actividad..."):
+                consolidar(ac)
+
             st.success("Consolidación realizada")
             st.rerun()
+
         except Exception as e:
             st.error(e)
 
     # ===============================
-    # CARGAR DATASET
+    # DATASET
     # ===============================
     df = dataset_actividad(ac)
 
-    if df is None or df.empty:
+    if df.empty:
         st.warning("Actividad sin datos")
         return
 
-    # ===============================
-    # NORMALIZAR FAMILIA DATASET
-    # ===============================
-    df["FAMILIA"] = df["FAMILIA"].apply(normalizar)
+    # 🔥 límite superior = familias del JEFE
+    df = filtrar_familias(df, familias_usuario)
+
+    if df.empty:
+        st.warning("No hay datos para sus familias")
+        return
 
     # ===============================
     # FILTRO VISUAL
     # ===============================
-    familias_existentes = sorted(df["FAMILIA"].unique())
+    familias_existentes = sorted(df["FAMILIA"].dropna().unique())
 
     familias_sel = st.multiselect(
         "Filtrar familias",
         familias_existentes,
-        default=familias_usuario
+        default=familias_existentes
     )
 
     if familias_sel:
         df = df[df["FAMILIA"].isin(familias_sel)]
 
-    st.subheader("Vista consolidada")
+    st.subheader(f"Vista consolidada — {ac}")
+    st.caption(f"Registros: {len(df):,}")
 
     st.dataframe(df, use_container_width=True)
 
     st.divider()
 
     # ===============================
-    # DESCARGAR EXCEL REAL
+    # DESCARGAR
     # ===============================
     buffer = BytesIO()
     df.to_excel(buffer, index=False)
