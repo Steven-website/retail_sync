@@ -14,10 +14,10 @@ def adc_view():
 
     st.header("🧑‍💻 Rol ADC")
 
-    familias_usuario = st.session_state.familias
+    familias_usuario = st.session_state.get("familias", [])
 
     if not familias_usuario:
-        st.error("Usuario sin familias asignadas")
+        st.error("⚠️ Usuario sin familias asignadas. Contacte al administrador.")
         return
 
     # ===============================
@@ -26,7 +26,7 @@ def adc_view():
     actividades = obtener_actividades()
 
     if not actividades:
-        st.warning("No existen actividades comerciales")
+        st.warning("No existen actividades comerciales disponibles.")
         return
 
     ac = st.selectbox(
@@ -37,32 +37,39 @@ def adc_view():
     # ===============================
     # DATASET
     # ===============================
-    df = dataset_actividad(ac)
+    with st.spinner("Cargando información..."):
+        df = dataset_actividad(ac)
 
-    if df.empty:
-        st.warning("Actividad sin datos")
+    if df is None or df.empty:
+        st.warning("La actividad seleccionada no tiene datos.")
         return
 
     df = filtrar_familias(df, familias_usuario)
 
     if df.empty:
-        st.warning("No hay artículos para sus familias")
+        st.warning("No existen artículos asignados a sus familias.")
         return
 
-    st.subheader(f"Base operativa — {ac}")
-    st.dataframe(df, use_container_width=True)
+    st.subheader(f"📊 Base operativa — {ac}")
+    st.caption(f"Registros disponibles: {len(df):,}")
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        height=500
+    )
 
     st.divider()
 
     # ===============================
-    # DESCARGAR
+    # DESCARGAR EXCEL
     # ===============================
     buffer = BytesIO()
     df.to_excel(buffer, index=False)
     buffer.seek(0)
 
     st.download_button(
-        label="⬇ Descargar Excel",
+        label="⬇ Descargar base en Excel",
         data=buffer,
         file_name=f"{ac}_ADC.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -71,24 +78,30 @@ def adc_view():
     st.divider()
 
     # ===============================
-    # SUBIR
+    # SUBIR ARCHIVO
     # ===============================
-    st.subheader("Subir archivo trabajado")
+    st.subheader("📤 Subir archivo trabajado")
 
     file = st.file_uploader(
-        "Subir Excel trabajado",
+        "Seleccione archivo Excel",
         type=["xlsx"]
     )
 
-    if file:
+    if file is not None:
 
-        if st.button("Aplicar actualización"):
+        st.info("Archivo listo para actualizar")
+
+        if st.button("✅ Aplicar actualización"):
 
             try:
 
-                with st.spinner("Procesando actualización..."):
+                with st.spinner("Aplicando cambios en la actividad..."):
 
                     base_excel = pd.read_excel(file)
+
+                    if base_excel.empty:
+                        st.warning("El archivo está vacío.")
+                        return
 
                     actualizar_actividad_desde_excel(
                         nombre=ac,
@@ -96,8 +109,9 @@ def adc_view():
                         familias_permitidas=familias_usuario
                     )
 
-                st.success("Actualización aplicada correctamente")
+                st.success("✔ Información actualizada correctamente")
                 st.rerun()
 
             except Exception as e:
-                st.error(f"Error al actualizar: {e}")
+                st.error("❌ Error al procesar el archivo")
+                st.exception(e)
