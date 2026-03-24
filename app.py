@@ -12,13 +12,7 @@ RUTA_MASTER = "data/master.parquet"
 RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 
 
-# ======================================================
-# CREAR MASTER VACIO SI NO EXISTE
-# ======================================================
-if not os.path.exists(RUTA_MASTER):
-    pd.DataFrame(columns=columnas).to_parquet(RUTA_MASTER)
-
-   def crear_master_vacio():
+def crear_master_vacio():
 
     columnas = [
         "PK_ARTICULO","ACTIVIDAD_COMERCIAL","FAMILIA","CATEGORIA","SUBCATEGORIA",
@@ -38,6 +32,7 @@ if not os.path.exists(RUTA_MASTER):
 
 if not os.path.exists(RUTA_MASTER):
     crear_master_vacio()
+
 else:
     try:
         test = pd.read_parquet(RUTA_MASTER)
@@ -45,7 +40,6 @@ else:
             crear_master_vacio()
     except:
         crear_master_vacio()
-
 
 # ======================================================
 # ACTUALIZAR MASTER DESDE BD
