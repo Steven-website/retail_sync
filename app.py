@@ -44,48 +44,59 @@ else:
 # ACTUALIZAR MASTER DESDE BD
 # ======================================================
 def actualizar_master():
+
+    if not os.path.exists(RUTA_MASTER):
+        return
+
+    if not os.path.exists(RUTA_ACT):
+        return
+
     master = pd.read_parquet(RUTA_MASTER)
+    act = pd.read_parquet(RUTA_ACT)
 
-    if master.empty:
-        return
+    # columnas estructurales
+    cols_base = act.columns.tolist()
 
-    if not os.path.exists(RUTA_BD):
-        return
-
-    bd = pd.read_parquet(RUTA_BD)
-
-    columnas_update = [
-        "FAMILIA", "CATEGORIA", "SUBCATEGORIA", "NO_ARTI", "DESCRIPCION", "TIPO_CLASIF",
-        "COMPRA_Q_2024", "COMPRA_Q_2025", "COMPRA_Q_2026",
-        "VTA_YTD_2024", "VTA_YTD_2025", "VTA_YTD_2026",
-        "VTA_Q_YTD_2024", "VTA_Q_YTD_2025", "VTA_Q_YTD_2026",
-        "INVENTARIO_Q"
+    # columnas comerciales que NUNCA se deben perder
+    cols_comerciales = [
+        "ACTIVIDAD_COMERCIAL",
+        "MUNDO_AC",
+        "PRECIO_PROMOCIONAL",
+        "DESCUENTO",
+        "PROC_AHORRO",
+        "FECHA_INICIO",
+        "FECHA_FIN",
+        "ACCION",
+        "COMENTARIO"
     ]
 
-    columnas_existentes = ["PK_ARTICULO"] + [c for c in columnas_update if c in bd.columns]
+    # =========================
+    # CREAR NUEVO MASTER
+    # =========================
 
-    if len(columnas_existentes) == 1:
-        return
+    lista = []
 
-    master = master.merge(
-        bd[columnas_existentes],
-        on="PK_ARTICULO",
-        how="left",
-        suffixes=("", "_NEW")
-    )
+    actividades = master["ACTIVIDAD_COMERCIAL"].unique()
 
-    for col in columnas_update:
-        if f"{col}_NEW" in master.columns:
-            if col in master.columns:
-                master[col] = master[f"{col}_NEW"].combine_first(master[col])
-            else:
-                master[col] = master[f"{col}_NEW"]
+    for ac in actividades:
 
-    master = master.drop(columns=[c for c in master.columns if c.endswith("_NEW")])
+        base_ac = master[master["ACTIVIDAD_COMERCIAL"] == ac]
 
-    master.to_parquet(RUTA_MASTER, index=False)
+        nuevo = act.copy()
 
+        nuevo["ACTIVIDAD_COMERCIAL"] = ac
 
+        nuevo = nuevo.merge(
+            base_ac[["PK_ARTICULO"] + cols_comerciales],
+            on="PK_ARTICULO",
+            how="left"
+        )
+
+        lista.append(nuevo)
+
+    master_nuevo = pd.concat(lista, ignore_index=True)
+
+    master_nuevo.to_parquet(RUTA_MASTER, index=False)
 # ======================================================
 # CONSOLIDAR
 # ======================================================
