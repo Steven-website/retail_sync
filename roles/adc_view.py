@@ -1,56 +1,84 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
-from data_manager import *
-from config import *
+from data_manager import dataset_actividad, filtrar_familias, actualizar_desde_excel, obtener_actividades
 
 
 def adc_view():
 
-    st.header("🧑‍💻 ROL ADC")
+    st.header("🧑‍💻 Rol ADC")
+
+    # ===============================
+    # VALIDAR SESSION
+    # ===============================
+    if "familias" not in st.session_state:
+        st.error("No hay familias asignadas al usuario")
+        return
 
     familias_usuario = st.session_state.familias
 
+    # ===============================
+    # OBTENER ACTIVIDADES
+    # ===============================
     actividades = obtener_actividades()
 
     if not actividades:
-        st.warning("No existen actividades")
+        st.warning("No existen actividades comerciales")
         return
 
     # ===============================
     # SELECCIONAR ACTIVIDAD
     # ===============================
     ac = st.selectbox(
-        "Seleccione actividad",
+        "Seleccione Actividad Comercial",
         actividades
     )
 
+    # ===============================
+    # CARGAR DATASET
+    # ===============================
     df = dataset_actividad(ac)
 
+    if df is None or df.empty:
+        st.warning("La actividad no tiene datos")
+        return
+
     # ===============================
-    # FILTRO FAMILIAS
+    # FILTRAR POR FAMILIAS
     # ===============================
     df = filtrar_familias(df, familias_usuario)
 
+    if df.empty:
+        st.warning("No hay datos para sus familias asignadas")
+        return
+
     st.subheader("Base operativa")
 
-    st.dataframe(df, width="stretch")
+    st.dataframe(df, use_container_width=True)
+
+    st.divider()
 
     # ===============================
-    # DESCARGAR EXCEL
+    # DESCARGAR EXCEL REAL
     # ===============================
-    st.subheader("Descargar")
+    st.subheader("Descargar base")
+
+    buffer = BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
 
     st.download_button(
-        "⬇ Descargar Excel",
-        data=df.to_csv(index=False).encode(),
-        file_name=f"{ac}_ADC.csv"
+        label="⬇ Descargar Excel",
+        data=buffer,
+        file_name=f"{ac}_ADC.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
     st.divider()
 
     # ===============================
-    # SUBIR EXCEL
+    # SUBIR ARCHIVO TRABAJADO
     # ===============================
     st.subheader("Subir archivo trabajado")
 
@@ -59,12 +87,14 @@ def adc_view():
         type=["xlsx"]
     )
 
-    if file:
+    if file is not None:
 
-        if st.button("Actualizar"):
+        if st.button("Actualizar información"):
 
             try:
                 actualizar_desde_excel(file, ac)
-                st.success("Actualización aplicada")
+                st.success("Actualización aplicada correctamente")
+                st.rerun()
+
             except Exception as e:
-                st.error(e)
+                st.error(f"Error al actualizar: {e}")
