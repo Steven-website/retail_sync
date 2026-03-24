@@ -6,19 +6,19 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-# 🔥 asegurar carpeta data
+# FIX: asegurar carpeta data al importar el módulo
 os.makedirs(DATA_DIR, exist_ok=True)
 
-RUTA_BD = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
+RUTA_BD     = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
 RUTA_MASTER = os.path.join(DATA_DIR, "master.parquet")
-RUTA_USERS = os.path.join(BASE_DIR, "usuarios.json")
+RUTA_USERS  = os.path.join(BASE_DIR, "usuarios.json")
 
 # =========================
 # CLAVES DEL MODELO
 # =========================
-PK = "PK_Articulos"
+PK              = "PK_Articulos"
 CAMPO_ACTIVIDAD = "ACTIVIDAD_COMERCIAL"
-CAMPO_FAMILIA = "FAMILIA"
+CAMPO_FAMILIA   = "FAMILIA"
 
 # =========================
 # COLUMNAS COMERCIALES
@@ -37,16 +37,15 @@ COLUMNAS_COMERCIALES = [
 # =========================
 # ROLES
 # =========================
-ROL_MASTER = "MASTER"
+ROL_MASTER   = "MASTER"
 ROL_JEFE_ADC = "JEFE_ADC"
-ROL_ADC = "ADC"
-ROL_PRECIOS = "PRECIOS"
+ROL_ADC      = "ADC"
+ROL_PRECIOS  = "PRECIOS"
 ROL_MARKETING = "MARKETING"
 
 # =========================
 # POLITICA DE VISIBILIDAD
 # =========================
-# 🔥 prioridad máxima del sistema
 FILTRO_FAMILIAS_ACTIVO = True
 
 # Roles que NO se filtran por familia
@@ -83,14 +82,16 @@ ROLES_SUBEN_EXCEL = {
 # SESSION STATE
 # =========================
 SESSION_DEFAULTS = {
-    "login": False,
+    "login":   False,
     "usuario": None,
-    "rol": None,
+    "rol":     None,
     "familias": [],
 }
 
 # =========================
 # PARAMETROS APP
 # =========================
-DEBUG_APP = True
+# FIX: cambiar a False en producción para no exponer datos de sesión
+DEBUG_APP = False
+
 NOMBRE_ARCHIVO_EXPORT = "BASE_ACTIVIDAD"
