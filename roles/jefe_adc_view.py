@@ -65,7 +65,7 @@ def jefe_adc_view():
 
     st.subheader(f"Vista consolidada — {ac}")
     st.caption(f"Registros: {len(df):,}")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
     st.divider()
 
     # =========================================================
