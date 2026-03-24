@@ -37,10 +37,9 @@ def adc_view():
     st.dataframe(df_filtrado, use_container_width=True, height=400)
     st.divider()
 
-    # Descargar Excel filtrado por familias
+    # ── Descargar Excel filtrado por familias ──
     buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df_filtrado.to_excel(w, index=False, sheet_name="BASE")
+    df_filtrado.to_excel(buf, index=False, engine="xlsxwriter")
     buf.seek(0)
 
     st.download_button(
@@ -52,7 +51,7 @@ def adc_view():
 
     st.divider()
 
-    # Subir y actualizar
+    # ── Subir y actualizar ──
     st.subheader("📤 Subir archivo trabajado")
     st.caption("Solo se actualizan sus familias. El resto no se toca.")
 
