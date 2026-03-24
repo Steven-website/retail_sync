@@ -1,7 +1,7 @@
 import io
 import os
 import unicodedata
-from typing import List, Optional
+
 import pandas as pd
 from config import (
     RUTA_BD,
@@ -251,15 +251,7 @@ def filtrar_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
     familias_df = df[CAMPO_FAMILIA].apply(_normalizar_texto)
     return df[familias_df.isin(familias_norm)].copy()
 
-
-def actualizar_desde_excel(file, nombre: str, familias_permitidas: Optional[List] = None) -> None:
-    master = leer_master()
-    if master.empty:
-        raise Exception("No existe MASTER")
-
-    base_excel = pd.read_excel(file)
-    if PK not in base_excel.columns:
-        raise Exception(f"Excel sin columna {PK}")
+ columna {PK}")
 
     cols_excel = [c for c in COLUMNAS_COMERCIALES if c in base_excel.columns]
     if not cols_excel:
