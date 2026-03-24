@@ -1,7 +1,5 @@
 import streamlit as st
-import io
-import pandas as pd
-from data_manager import obtener_actividades, dataset_actividad
+from data_manager import obtener_actividades, dataset_actividad, a_csv
 
 def visualizador_view():
     st.header("👁️ Panel VISUALIZADOR")
@@ -11,6 +9,7 @@ def visualizador_view():
         st.warning("No hay actividades disponibles.")
         return
 
+    # Paso 1: Seleccionar actividad
     ac = st.selectbox("Seleccione actividad", actividades)
 
     df = dataset_actividad(ac)
@@ -22,14 +21,10 @@ def visualizador_view():
     st.dataframe(df, use_container_width=True, height=450)
     st.divider()
 
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df.to_excel(w, index=False, sheet_name="BASE")
-    buf.seek(0)
-
+    # Paso 2: Descargar CSV completo sin filtro
     st.download_button(
-        "⬇️ Descargar Excel",
-        data=buf.getvalue(),
-        file_name=f"{ac}_VISUALIZADOR.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "⬇️ Descargar CSV completo",
+        data=a_csv(df),
+        file_name=f"{ac}_VISUALIZADOR.csv",
+        mime="text/csv"
     )
