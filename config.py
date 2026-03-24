@@ -1,17 +1,20 @@
 import os
 
 # =========================
-# RUTAS
+# RUTAS BASE
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
+
+# 🔥 asegurar carpeta data
+os.makedirs(DATA_DIR, exist_ok=True)
 
 RUTA_BD = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
 RUTA_MASTER = os.path.join(DATA_DIR, "master.parquet")
 RUTA_USERS = os.path.join(BASE_DIR, "usuarios.json")
 
 # =========================
-# CLAVES
+# CLAVES DEL MODELO
 # =========================
 PK = "PK_Articulos"
 CAMPO_ACTIVIDAD = "ACTIVIDAD_COMERCIAL"
@@ -40,6 +43,20 @@ ROL_ADC = "ADC"
 ROL_PRECIOS = "PRECIOS"
 ROL_MARKETING = "MARKETING"
 
+# =========================
+# POLITICA DE VISIBILIDAD
+# =========================
+# 🔥 prioridad máxima del sistema
+FILTRO_FAMILIAS_ACTIVO = True
+
+# Roles que NO se filtran por familia
+ROLES_SIN_FILTRO_FAMILIA = {
+    ROL_MASTER,
+}
+
+# =========================
+# PERMISOS OPERATIVOS
+# =========================
 ROLES_CONSOLIDAN = {
     ROL_MASTER,
     ROL_JEFE_ADC,
@@ -71,3 +88,9 @@ SESSION_DEFAULTS = {
     "rol": None,
     "familias": [],
 }
+
+# =========================
+# PARAMETROS APP
+# =========================
+DEBUG_APP = True
+NOMBRE_ARCHIVO_EXPORT = "BASE_ACTIVIDAD"
