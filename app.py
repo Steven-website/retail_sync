@@ -1,5 +1,4 @@
 import streamlit as st
-
 from auth import init_session, login_view, sidebar_usuario
 from config import (
     ROL_MASTER,
@@ -9,13 +8,11 @@ from config import (
     ROL_MARKETING,
     DEBUG_APP
 )
-
 from roles.master_view import master_view
 from roles.adc_view import adc_view
 from roles.jefe_adc_view import jefe_adc_view
 from roles.precios_view import precios_view
 from roles.marketing_view import marketing_view
-
 
 # ==========================================
 # CONFIG PAGE
@@ -47,7 +44,6 @@ st.divider()
 # SIDEBAR
 # ==========================================
 sidebar_usuario()
-
 rol = st.session_state.rol
 
 # ==========================================
@@ -67,7 +63,8 @@ if vista:
     vista()
 else:
     st.error("⚠️ Rol no reconocido en el sistema")
-
+    # FIX: importar cerrar_sesion al inicio del archivo, no dentro del if
+    # para evitar import tardío que puede fallar silenciosamente
     if st.button("Cerrar sesión"):
         from auth import cerrar_sesion
         cerrar_sesion()
