@@ -1,7 +1,14 @@
 import streamlit as st
 
 from auth import init_session, login_view, sidebar_usuario
-from config import *
+from config import (
+    ROL_MASTER,
+    ROL_ADC,
+    ROL_JEFE_ADC,
+    ROL_PRECIOS,
+    ROL_MARKETING,
+    DEBUG_APP
+)
 
 from roles.master_view import master_view
 from roles.adc_view import adc_view
@@ -31,6 +38,12 @@ if not st.session_state.login:
     st.stop()
 
 # ==========================================
+# HEADER APP
+# ==========================================
+st.title("🛒 Retail Sync")
+st.divider()
+
+# ==========================================
 # SIDEBAR
 # ==========================================
 sidebar_usuario()
@@ -38,22 +51,30 @@ sidebar_usuario()
 rol = st.session_state.rol
 
 # ==========================================
-# ROUTER POR ROL
+# ROUTER DINAMICO
 # ==========================================
-if rol == ROL_MASTER:
-    master_view()
+ROUTER = {
+    ROL_MASTER: master_view,
+    ROL_ADC: adc_view,
+    ROL_JEFE_ADC: jefe_adc_view,
+    ROL_PRECIOS: precios_view,
+    ROL_MARKETING: marketing_view,
+}
 
-elif rol == ROL_ADC:
-    adc_view()
+vista = ROUTER.get(rol)
 
-elif rol == ROL_JEFE_ADC:
-    jefe_adc_view()
-
-elif rol == ROL_PRECIOS:
-    precios_view()
-
-elif rol == ROL_MARKETING:
-    marketing_view()
-
+if vista:
+    vista()
 else:
-    st.error("Rol no reconocido")
+    st.error("⚠️ Rol no reconocido en el sistema")
+
+    if st.button("Cerrar sesión"):
+        from auth import cerrar_sesion
+        cerrar_sesion()
+
+# ==========================================
+# DEBUG
+# ==========================================
+if DEBUG_APP:
+    with st.expander("DEBUG SESSION"):
+        st.write(st.session_state)
