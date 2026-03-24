@@ -1,11 +1,11 @@
 import streamlit as st
 from auth import cargar_usuarios, guardar_usuarios
-from config import ROLES_DISPONIBLES, FAMILIAS_DISPONIBLES, ROL_MASTER
+from config import ROLES_DISPONIBLES, FAMILIAS_DISPONIBLES
 from data_manager import (
-    leer_bd, subir_bd,
-    leer_base, obtener_actividades,
+    leer_bd, subir_bd, leer_base,
+    obtener_actividades,
     crear_actividad, eliminar_actividad, regenerar_actividad,
-    descargar_actividad_parquet, descargar_base_completa_parquet,
+    dataset_actividad, a_parquet,
 )
 
 def master_view():
@@ -15,19 +15,16 @@ def master_view():
         "📂 BD", "⚙️ Actividades", "👥 Usuarios", "⬇️ Descargas"
     ])
 
-    # ─────────────────────────────────────────
-    # TAB BD
-    # ─────────────────────────────────────────
+    # ── TAB BD ────────────────────────────────────────────
     with tab_bd:
         st.subheader("BD_ACTUALIZACION")
-
         bd = leer_bd()
         if not bd.empty:
             st.success(f"✔ BD cargada — {len(bd):,} filas · {len(bd.columns)} columnas")
         else:
-            st.warning("⚠️ No hay BD cargada.")
+            st.warning("⚠️ No hay BD cargada. Suba un archivo .parquet para comenzar.")
 
-        archivo = st.file_uploader("Subir nueva BD (.parquet)", type=["parquet"])
+        archivo = st.file_uploader("Subir BD (.parquet)", type=["parquet"])
         if archivo:
             if st.button("💾 Guardar BD"):
                 try:
@@ -37,13 +34,9 @@ def master_view():
                 except Exception as e:
                     st.error(f"❌ {e}")
 
-    # ─────────────────────────────────────────
-    # TAB ACTIVIDADES
-    # ─────────────────────────────────────────
+    # ── TAB ACTIVIDADES ───────────────────────────────────
     with tab_actividades:
-
-        # Crear
-        st.subheader("Crear actividad")
+        st.subheader("Crear actividad comercial")
         nombre = st.text_input("Nombre de la actividad")
         if st.button("➕ Crear"):
             if not nombre.strip():
@@ -57,19 +50,17 @@ def master_view():
                     st.error(f"❌ {e}")
 
         st.divider()
-
         actividades = obtener_actividades()
         if not actividades:
-            st.info("No hay actividades creadas.")
+            st.info("No hay actividades creadas aún.")
         else:
             ac = st.selectbox("Seleccione actividad", actividades, key="ac_gestion")
-
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("🔄 Regenerar"):
                     try:
                         regenerar_actividad(ac)
-                        st.success(f"✔ '{ac}' regenerada.")
+                        st.success(f"✔ '{ac}' regenerada. Artículos nuevos agregados, trabajo previo conservado.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ {e}")
@@ -77,7 +68,7 @@ def master_view():
                 confirmar = st.checkbox("Confirmar eliminación")
                 if st.button("🗑️ Eliminar"):
                     if not confirmar:
-                        st.warning("Marque la casilla primero.")
+                        st.warning("Marque la casilla de confirmación primero.")
                     else:
                         try:
                             eliminar_actividad(ac)
@@ -86,14 +77,10 @@ def master_view():
                         except Exception as e:
                             st.error(f"❌ {e}")
 
-    # ─────────────────────────────────────────
-    # TAB USUARIOS
-    # ─────────────────────────────────────────
+    # ── TAB USUARIOS ──────────────────────────────────────
     with tab_usuarios:
-
         usuarios = cargar_usuarios()
 
-        # Tabla actual
         st.subheader("Usuarios existentes")
         if not usuarios:
             st.info("No hay usuarios.")
@@ -114,18 +101,17 @@ def master_view():
                             key=f"rol_{i}"
                         )
                     with col2:
-                        nuevas_familias = st.multiselect(
+                        nuevas_fam = st.multiselect(
                             "Familias",
                             FAMILIAS_DISPONIBLES,
-                            default=u.get("familias", []),
+                            default=[f for f in u.get("familias", []) if f in FAMILIAS_DISPONIBLES],
                             key=f"fam_{i}"
                         )
-
                     c1, c2 = st.columns(2)
                     with c1:
-                        if st.button("💾 Guardar cambios", key=f"save_{i}"):
+                        if st.button("💾 Guardar", key=f"save_{i}"):
                             usuarios[i]["rol"]      = nuevo_rol
-                            usuarios[i]["familias"] = nuevas_familias
+                            usuarios[i]["familias"] = nuevas_fam
                             if nuevo_pwd.strip():
                                 usuarios[i]["password"] = nuevo_pwd.strip()
                             guardar_usuarios(usuarios)
@@ -140,72 +126,58 @@ def master_view():
                                 st.rerun()
 
         st.divider()
-
-        # Crear usuario
         st.subheader("Crear nuevo usuario")
-        nuevo_usuario  = st.text_input("Usuario")
-        nuevo_password = st.text_input("Contraseña", type="password")
-        nuevo_rol      = st.selectbox("Rol", ROLES_DISPONIBLES, key="nuevo_rol")
-        nuevas_familias = st.multiselect(
-            "Familias asignadas",
-            FAMILIAS_DISPONIBLES,
-            key="nuevas_familias"
-        )
+        nu  = st.text_input("Usuario", key="nu")
+        np_ = st.text_input("Contraseña", type="password", key="np")
+        nr  = st.selectbox("Rol", ROLES_DISPONIBLES, key="nr")
+        nf  = st.multiselect("Familias", FAMILIAS_DISPONIBLES, key="nf")
 
         if st.button("➕ Crear usuario"):
-            if not nuevo_usuario.strip() or not nuevo_password.strip():
+            if not nu.strip() or not np_.strip():
                 st.warning("Complete usuario y contraseña.")
             else:
                 usuarios = cargar_usuarios()
-                existe   = any(u["usuario"].lower() == nuevo_usuario.strip().lower() for u in usuarios)
-                if existe:
+                if any(u["usuario"].lower() == nu.strip().lower() for u in usuarios):
                     st.error("Ya existe un usuario con ese nombre.")
                 else:
                     usuarios.append({
-                        "usuario":  nuevo_usuario.strip(),
-                        "password": nuevo_password.strip(),
-                        "rol":      nuevo_rol,
-                        "familias": nuevas_familias,
+                        "usuario":  nu.strip(),
+                        "password": np_.strip(),
+                        "rol":      nr,
+                        "familias": nf,
                     })
                     guardar_usuarios(usuarios)
-                    st.success(f"✔ Usuario '{nuevo_usuario}' creado.")
+                    st.success(f"✔ Usuario '{nu}' creado.")
                     st.rerun()
 
-    # ─────────────────────────────────────────
-    # TAB DESCARGAS
-    # ─────────────────────────────────────────
+    # ── TAB DESCARGAS ─────────────────────────────────────
     with tab_descargas:
-        st.subheader("Descargas")
-
+        st.subheader("Descargas en parquet")
         actividades = obtener_actividades()
 
         if actividades:
             st.markdown("**Por actividad**")
             ac_dl = st.selectbox("Seleccione actividad", actividades, key="ac_dl")
-            if st.button("⬇️ Descargar actividad (.parquet)"):
-                try:
-                    data = descargar_actividad_parquet(ac_dl)
-                    st.download_button(
-                        "📥 Haga clic para descargar",
-                        data=data,
-                        file_name=f"{ac_dl}.parquet",
-                        mime="application/octet-stream",
-                        key="dl_ac"
-                    )
-                except Exception as e:
-                    st.error(f"❌ {e}")
-
-        st.divider()
-        st.markdown("**BASE completa**")
-        if st.button("⬇️ Descargar BASE completa (.parquet)"):
-            try:
-                data = descargar_base_completa_parquet()
+            df_ac = dataset_actividad(ac_dl)
+            if not df_ac.empty:
                 st.download_button(
-                    "📥 Haga clic para descargar",
-                    data=data,
-                    file_name="BASE_COMPLETA.parquet",
+                    "⬇️ Descargar actividad (.parquet)",
+                    data=a_parquet(df_ac),
+                    file_name=f"{ac_dl}.parquet",
                     mime="application/octet-stream",
-                    key="dl_base"
+                    key="dl_ac"
                 )
-            except Exception as e:
-                st.error(f"❌ {e}")
+            st.divider()
+
+        st.markdown("**BASE completa**")
+        base = leer_base()
+        if not base.empty:
+            st.download_button(
+                "⬇️ Descargar BASE completa (.parquet)",
+                data=a_parquet(base),
+                file_name="BASE_COMPLETA.parquet",
+                mime="application/octet-stream",
+                key="dl_base"
+            )
+        else:
+            st.info("No hay BASE generada aún.")
