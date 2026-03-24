@@ -1,95 +1,66 @@
 import json
 import streamlit as st
-from config import (
-    SESSION_DEFAULTS,
-    RUTA_USERS,
-    ROL_MASTER,
-    FILTRO_FAMILIAS_ACTIVO,
-    ROLES_SIN_FILTRO_FAMILIA
-)
+from config import SESSION_DEFAULTS, RUTA_USERS, ROL_MASTER
 
 def init_session():
     for k, v in SESSION_DEFAULTS.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-def cargar_usuarios():
-    if not st.session_state.get("_users_cache"):
-        try:
-            with open(RUTA_USERS, "r", encoding="utf-8") as f:
-                st.session_state._users_cache = json.load(f)
-        except Exception as e:
-            st.error(f"Error leyendo usuarios.json: {e}")
-            st.stop()
-    return st.session_state._users_cache
-
-def _normalizar_familias(familias):
-    if familias is None:
+def cargar_usuarios() -> list:
+    try:
+        with open(RUTA_USERS, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
         return []
-    if isinstance(familias, str):
-        familias = familias.split(",")
-    familias_ok = []
-    for f in familias:
-        if f is None:
-            continue
-        f = str(f).strip().upper()
-        if f:
-            familias_ok.append(f)
-    return familias_ok
+    except Exception as e:
+        st.error(f"Error leyendo usuarios: {e}")
+        st.stop()
+
+def guardar_usuarios(usuarios: list):
+    with open(RUTA_USERS, "w", encoding="utf-8") as f:
+        json.dump(usuarios, f, ensure_ascii=False, indent=2)
 
 def login_view():
-    st.title("🛒 Retail Sync")
-    usuario  = st.text_input("Usuario")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Ingresar"):
-        if not usuario or not password:
-            st.warning("Debe ingresar usuario y contraseña")
-            return
-
-        usuarios = cargar_usuarios()
-        user_ok  = None
-
-        for u in usuarios:
-            if (
-                str(u.get("usuario", "")).strip().lower() == usuario.strip().lower()
-                and str(u.get("password", "")).strip() == password.strip()
-            ):
-                user_ok = u
-                break
-
-        if user_ok:
-            rol = user_ok.get("rol")
-            st.session_state.login   = True
-            st.session_state.usuario = user_ok["usuario"]
-            st.session_state.rol     = rol
-
-            if FILTRO_FAMILIAS_ACTIVO and rol not in ROLES_SIN_FILTRO_FAMILIA:
-                familias = _normalizar_familias(user_ok.get("FAMILIA"))
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("🛒 Retail Sync")
+        st.divider()
+        usuario  = st.text_input("Usuario")
+        password = st.text_input("Contraseña", type="password")
+        if st.button("Ingresar", use_container_width=True):
+            if not usuario or not password:
+                st.warning("Complete usuario y contraseña.")
+                return
+            usuarios = cargar_usuarios()
+            encontrado = None
+            for u in usuarios:
+                if (
+                    u.get("usuario", "").strip().lower() == usuario.strip().lower()
+                    and u.get("password", "").strip() == password.strip()
+                ):
+                    encontrado = u
+                    break
+            if encontrado:
+                st.session_state.login    = True
+                st.session_state.usuario  = encontrado["usuario"]
+                st.session_state.rol      = encontrado["rol"]
+                st.session_state.familias = encontrado.get("familias", [])
+                st.rerun()
             else:
-                familias = []
-
-            st.session_state.familias = familias
-            st.rerun()
-        else:
-            st.error("Credenciales incorrectas")
+                st.error("Usuario o contraseña incorrectos.")
 
 def sidebar_usuario():
     with st.sidebar:
-        st.success(f"Usuario: {st.session_state.usuario}")
-        st.info(f"Rol: {st.session_state.rol}")
-        if st.session_state.rol != ROL_MASTER:
-            familias = st.session_state.familias
-            if familias:
-                st.caption(f"Familias: {', '.join(familias)}")
-            else:
-                st.caption("Familias: (sin asignar)")
-        if st.button("Cerrar sesión"):
+        st.markdown(f"**👤 {st.session_state.usuario}**")
+        st.caption(f"Rol: {st.session_state.rol}")
+        if st.session_state.familias:
+            st.caption(f"Familias: {', '.join(st.session_state.familias)}")
+        st.divider()
+        if st.button("🚪 Cerrar sesión", use_container_width=True):
             cerrar_sesion()
 
 def cerrar_sesion():
     for k in SESSION_DEFAULTS.keys():
         st.session_state[k] = SESSION_DEFAULTS[k]
-    if "_users_cache" in st.session_state:
-        del st.session_state["_users_cache"]
     st.rerun()
