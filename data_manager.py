@@ -28,14 +28,27 @@ def _normalizar(valor) -> str:
     txt = unicodedata.normalize("NFKD", txt)
     return "".join(c for c in txt if not unicodedata.combining(c))
 
+def _limpiar_columnas(df: pd.DataFrame) -> pd.DataFrame:
+    """Limpia nombres de columnas — quita BOM, espacios y caracteres invisibles."""
+    df = df.copy()
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.replace('\ufeff', '', regex=False)
+        .str.replace('\u200b', '', regex=False)
+    )
+    return df
+
 def _validar_pk(df: pd.DataFrame) -> pd.DataFrame:
-    # Limpiar nombres de columnas por si vienen con BOM o espacios
-    df = df.copy()
-    df.columns = df.columns.str.strip().str.replace("\ufeff", "", regex=False)
-    df = df.copy()
+    df = _limpiar_columnas(df)
     if PK not in df.columns:
-        raise Exception(f"El archivo no tiene la columna '{PK}'.")
-    df[PK] = df[PK].astype(str).str.strip()
+        raise Exception(f"El archivo no tiene la columna '{PK}'. Columnas encontradas: {list(df.columns[:5])}")
+    # Convertir PK a string limpio — maneja enteros, floats y strings
+    df[PK] = (
+        df[PK]
+        .apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x).strip() not in ["", "nan"] else "")
+        .str.strip()
+    )
     return df
 
 def _agregar_cols_comerciales(df: pd.DataFrame) -> pd.DataFrame:
@@ -79,6 +92,7 @@ def leer_base() -> pd.DataFrame:
     base = _leer_parquet(RUTA_BASE)
     if base.empty:
         return base
+    base = _limpiar_columnas(base)
     base = _agregar_cols_comerciales(base)
     base = _validar_pk(base)
     if CAMPO_ACTIVIDAD not in base.columns:
@@ -87,6 +101,7 @@ def leer_base() -> pd.DataFrame:
     return base
 
 def _guardar_base(df: pd.DataFrame):
+    df = _limpiar_columnas(df)
     df = _agregar_cols_comerciales(df)
     df = _validar_pk(df)
     if CAMPO_ACTIVIDAD not in df.columns:
@@ -196,21 +211,27 @@ def actualizar_desde_csv(
     nombre = nombre.strip()
     if archivo is None or archivo.empty:
         raise Exception("El archivo está vacío.")
+
     base = leer_base()
     if base.empty:
         raise Exception("No existe BASE.")
-    if PK not in archivo.columns:
-        raise Exception(f"El archivo no tiene la columna '{PK}'.")
+
+    # Limpiar y validar el archivo subido
+    archivo = _limpiar_columnas(archivo)
     archivo = _validar_pk(archivo.copy())
-    cols    = [c for c in COLUMNAS_COMERCIALES if c in archivo.columns]
+
+    cols = [c for c in COLUMNAS_COMERCIALES if c in archivo.columns]
     if not cols:
-        raise Exception("El archivo no tiene columnas comerciales.")
+        raise Exception("El archivo no tiene columnas comerciales (MUNDO_AC, PRECIO_PROMOCIONAL, etc.).")
+
     mask_ac   = base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre
     actividad = base.loc[mask_ac].copy()
     if actividad.empty:
         raise Exception(f"La actividad '{nombre}' no existe.")
+
     actividad = _validar_pk(actividad)
     objetivo  = actividad.copy()
+
     if familias_permitidas:
         if CAMPO_FAMILIA not in actividad.columns:
             raise Exception(f"No existe la columna {CAMPO_FAMILIA}.")
@@ -218,21 +239,28 @@ def actualizar_desde_csv(
         objetivo = actividad[actividad[CAMPO_FAMILIA].apply(_normalizar).isin(norm)].copy()
         if objetivo.empty:
             raise Exception("No hay artículos de sus familias en esta actividad.")
+
     pks_ok  = set(objetivo[PK].astype(str).str.strip())
     archivo = archivo[[PK] + cols].drop_duplicates(subset=[PK], keep="last")
     archivo = archivo[archivo[PK].astype(str).str.strip().isin(pks_ok)]
+
     if archivo.empty:
         raise Exception("El archivo no tiene PK válidos para sus familias.")
+
     updates  = archivo.set_index(PK)
     objetivo = objetivo.set_index(PK)
     comunes  = objetivo.index.intersection(updates.index)
+
     if len(comunes) == 0:
         raise Exception("No hay PK coincidentes entre el archivo y la actividad.")
+
     for col in cols:
         if col not in objetivo.columns:
             objetivo[col] = None
         objetivo.loc[comunes, col] = updates.loc[comunes, col]
+
     objetivo = objetivo.reset_index()
+
     if familias_permitidas:
         restantes = actividad[
             ~actividad[PK].isin(set(objetivo[PK].astype(str).str.strip()))
@@ -240,8 +268,10 @@ def actualizar_desde_csv(
         actividad_final = pd.concat([restantes, objetivo], ignore_index=True)
     else:
         actividad_final = objetivo.copy()
+
     base_final = pd.concat([
         base.loc[~mask_ac].copy(),
         actividad_final
     ], ignore_index=True)
+
     _guardar_base(base_final)
