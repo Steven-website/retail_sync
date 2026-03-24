@@ -1,32 +1,29 @@
 [
   {
-    "usuario":"Steven",
-    "password":"123",
-    "rol":"MASTER",
-    "FAMILIA":"ALL"
+    "usuario": "Steven",
+    "password": "123",
+    "rol": "MASTER"
   },
   {
-    "usuario":"jefe1",
-    "password":"123",
-    "rol":"JEFE_ADC",
-    "FAMILIA":"ALL"
+    "usuario": "jefe1",
+    "password": "123",
+    "rol": "JEFE_ADC",
+    "FAMILIAS": ["ELECTRODOMESTICOS", "HOGAR", "BAZAR"]
   },
   {
-    "usuario":"adc1",
-    "password":"123",
-    "rol":"ADC",
-    "FAMILIA":"ELECTRODOMESTICOS"
+    "usuario": "adc1",
+    "password": "123",
+    "rol": "ADC",
+    "FAMILIAS": ["ELECTRODOMESTICOS", "HOGAR"]
   },
   {
-    "usuario":"precios",
-    "password":"123",
-    "rol":"PRECIOS",
-    "FAMILIA":"ALL"
+    "usuario": "precios1",
+    "password": "123",
+    "rol": "PRECIOS"
   },
   {
-    "usuario":"marketing",
-    "password":"123",
-    "rol":"MARKETING",
-    "FAMILIA":"ALL"
+    "usuario": "marketing1",
+    "password": "123",
+    "rol": "MARKETING"
   }
 ]
