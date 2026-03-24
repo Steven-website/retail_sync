@@ -1,255 +1,249 @@
 import streamlit as st
 import pandas as pd
-import json
-import io
 import os
-from openpyxl import Workbook
+import io
 
-st.set_page_config(page_title="Retail Sync", layout="wide")
+st.set_page_config(layout="wide")
 st.title("🛒 Retail Sync")
 
-RUTA_MASTER = "data/master.parquet"
+# =============================
+# RUTAS
+# =============================
 RUTA_BD = "data/BD_ACTUALIZACION.parquet"
+RUTA_MASTER = "data/master.parquet"
 
+PK = "PK_Articulos"
 
-# =====================================================
-# UTIL
-# =====================================================
-def normalizar_columnas(df):
-    df.columns = df.columns.str.strip()
+COLUMNAS_COMERCIALES = [
+    "MUNDO_AC",
+    "PRECIO_PROMOCIONAL",
+    "DESCUENTO",
+    "PORC_AHORRO",
+    "FECHA_INICIO",
+    "FECHA_FIN",
+    "ACCION",
+    "COMENTARIO"
+]
+
+# =============================
+# CARGAR BD UNIVERSO
+# =============================
+def cargar_bd():
+
+    if not os.path.exists(RUTA_BD):
+        st.error("❌ No existe BD_ACTUALIZACION")
+        st.stop()
+
+    df = pd.read_parquet(RUTA_BD)
+
+    if PK not in df.columns:
+        st.error("❌ BD_ACTUALIZACION no tiene PK_Articulos")
+        st.stop()
+
     return df
 
 
-def detectar_pk(df):
-    for c in df.columns:
-        if c.upper().replace(" ", "") in ["PK_ARTICULOS", "PKARTICULOS"]:
-            return c
-    return None
-
-
-# =====================================================
-# CREAR MASTER
-# =====================================================
+# =============================
+# CREAR MASTER VACIO
+# =============================
 def crear_master_vacio():
 
-    if not os.path.exists(RUTA_BD):
-        df = pd.DataFrame(columns=["PK_Articulos","ACTIVIDAD_COMERCIAL"])
-        df.to_parquet(RUTA_MASTER,index=False)
-        return
+    bd = cargar_bd()
 
-    bd = pd.read_parquet(RUTA_BD)
-    bd = normalizar_columnas(bd)
+    master = bd.copy()
+    master.insert(1, "ACTIVIDAD_COMERCIAL", "")
 
-    pk = detectar_pk(bd)
+    for c in COLUMNAS_COMERCIALES:
+        master[c] = None
 
-    columnas = bd.columns.tolist()
-    columnas.insert(1,"ACTIVIDAD_COMERCIAL")
+    master.to_parquet(RUTA_MASTER, index=False)
 
-    columnas += [
-        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
-        "FECHA_INICIO","FECHA_FIN","ACCION","COMENTARIO"
-    ]
-
-    df = pd.DataFrame(columns=columnas)
-    df.to_parquet(RUTA_MASTER,index=False)
+    return master
 
 
-if not os.path.exists(RUTA_MASTER):
-    crear_master_vacio()
+def cargar_master():
+
+    if not os.path.exists(RUTA_MASTER):
+        return crear_master_vacio()
+
+    return pd.read_parquet(RUTA_MASTER)
 
 
-# =====================================================
-# ACTUALIZAR MASTER
-# =====================================================
+# =============================
+# RECONSTRUIR MASTER
+# =============================
 def actualizar_master():
 
     if not os.path.exists(RUTA_MASTER):
         return
 
-    if not os.path.exists(RUTA_BD):
-        return
-
-    master = pd.read_parquet(RUTA_MASTER)
-    bd = pd.read_parquet(RUTA_BD)
-
-    master = normalizar_columnas(master)
-    bd = normalizar_columnas(bd)
-
-    pk = detectar_pk(bd)
-    if pk is None:
-        st.error("No se detecta PK en BD_ACTUALIZACION")
-        return
+    bd = cargar_bd()
+    master = cargar_master()
 
     if master.empty:
         return
 
-    columnas_comerciales = [
-        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
-        "FECHA_INICIO","FECHA_FIN","ACCION","COMENTARIO"
-    ]
-
-    for col in columnas_comerciales:
-        if col not in master.columns:
-            master[col] = None
-
-    lista = []
-
     actividades = master["ACTIVIDAD_COMERCIAL"].dropna().unique()
 
+    nuevo_master = []
+
     for ac in actividades:
+
+        if ac == "":
+            continue
 
         base_ac = master[master["ACTIVIDAD_COMERCIAL"] == ac]
 
         nuevo = bd.copy()
-        nuevo.insert(1,"ACTIVIDAD_COMERCIAL",ac)
+        nuevo.insert(1, "ACTIVIDAD_COMERCIAL", ac)
 
-        cols_merge = [pk] + [c for c in columnas_comerciales if c in base_ac.columns]
+        cols_usuario = [PK] + COLUMNAS_COMERCIALES
+
+        base_usuario = base_ac[cols_usuario]
 
         nuevo = nuevo.merge(
-            base_ac[cols_merge],
-            on=pk,
-            how="left"
+            base_usuario,
+            on=PK,
+            how="left",
+            suffixes=("","_old")
         )
 
-        lista.append(nuevo)
+        nuevo_master.append(nuevo)
 
-    master_nuevo = pd.concat(lista,ignore_index=True)
+    if len(nuevo_master) > 0:
+        master = pd.concat(nuevo_master)
+        master.to_parquet(RUTA_MASTER, index=False)
 
-    master_nuevo.to_parquet(RUTA_MASTER,index=False)
 
-
-# =====================================================
-# CONSOLIDAR
-# =====================================================
+# =============================
+# CONSOLIDAR CAMBIOS USUARIO
+# =============================
 def consolidar(actividad):
 
-    master = pd.read_parquet(RUTA_MASTER)
-    master = normalizar_columnas(master)
+    archivo = st.file_uploader("Subir archivo modificado", type="parquet")
 
-    pk = detectar_pk(master)
+    if archivo is not None:
 
-    for archivo in os.listdir("data"):
+        cambios = pd.read_parquet(archivo)
+        master = cargar_master()
 
-        if archivo.startswith("trabajo_") and actividad in archivo:
+        mask = master["ACTIVIDAD_COMERCIAL"] == actividad
 
-            temp = pd.read_parquet(os.path.join("data",archivo))
-            temp = normalizar_columnas(temp)
+        master_ac = master[mask]
 
-            master = master.merge(
-                temp,
-                on=[pk,"ACTIVIDAD_COMERCIAL"],
-                how="left",
-                suffixes=("","_NEW")
-            )
+        cols_editables = [c for c in cambios.columns if c in COLUMNAS_COMERCIALES]
 
-            if "ACCION_NEW" in master.columns:
-                master["ACCION"] = master["ACCION_NEW"].combine_first(master["ACCION"])
+        master_ac = master_ac.set_index(PK)
+        cambios = cambios.set_index(PK)
 
-            if "COMENTARIO_NEW" in master.columns:
-                master["COMENTARIO"] = master["COMENTARIO_NEW"].combine_first(master["COMENTARIO"])
+        master_ac.update(cambios[cols_editables])
 
-            master = master.drop(columns=[c for c in master.columns if "_NEW" in c])
+        master.update(master_ac)
 
-    master.to_parquet(RUTA_MASTER,index=False)
+        master.to_parquet(RUTA_MASTER, index=False)
+
+        st.success("✅ Cambios aplicados")
 
 
-# =====================================================
-# LOGIN
-# =====================================================
-if "login" not in st.session_state:
-    st.session_state.login = False
+# =============================
+# LOGIN SIMPLE
+# =============================
+usuarios = {
+    "steven":"MASTER",
+    "adc":"ADC",
+    "jefe":"JEFE_ADC",
+    "precios":"PRECIOS",
+    "marketing":"MARKETING"
+}
 
-if not st.session_state.login:
+usuario = st.sidebar.selectbox("Usuario", list(usuarios.keys()))
+rol = usuarios[usuario]
 
-    user = st.text_input("Usuario")
-    pwd = st.text_input("Password",type="password")
+st.sidebar.write("ROL:", rol)
 
-    if st.button("Ingresar"):
+# =============================
+# ACTUALIZAR MASTER AL ENTRAR
+# =============================
+actualizar_master()
 
-        with open("usuarios.json",encoding="utf-8") as f:
-            usuarios = json.load(f)
+master = cargar_master()
 
-        for u in usuarios:
-            if u["usuario"] == user and u["password"] == pwd:
-                st.session_state.login = True
-                st.session_state.user = u
-                st.rerun()
+# =============================
+# ROL MASTER
+# =============================
+if rol == "MASTER":
 
-        st.error("Credenciales incorrectas")
+    st.header("ROL MASTER")
 
-else:
+    nueva = st.text_input("Crear nueva Actividad Comercial")
 
-    actualizar_master()
+    if st.button("CREAR ACTIVIDAD"):
 
-    usuario = st.session_state.user["usuario"]
-    rol = st.session_state.user["rol"]
+        if nueva != "":
 
-    master = pd.read_parquet(RUTA_MASTER)
-    master = normalizar_columnas(master)
+            bd = cargar_bd()
 
-    st.success(f"Bienvenido {usuario}")
+            nueva_base = bd.copy()
+            nueva_base.insert(1, "ACTIVIDAD_COMERCIAL", nueva)
 
-    actividades = master["ACTIVIDAD_COMERCIAL"].dropna().unique()
+            for c in COLUMNAS_COMERCIALES:
+                nueva_base[c] = None
 
-    if len(actividades) == 0 and rol == "MASTER":
+            master = pd.concat([master, nueva_base])
 
-        nueva = st.text_input("Crear Primera Actividad")
+            master.to_parquet(RUTA_MASTER, index=False)
 
-        if st.button("CREAR"):
-
-            bd = pd.read_parquet(RUTA_BD)
-            bd = normalizar_columnas(bd)
-
-            bd.insert(1,"ACTIVIDAD_COMERCIAL",nueva)
-
-            for c in ["MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO",
-                      "PORC_AHORRO","FECHA_INICIO","FECHA_FIN",
-                      "ACCION","COMENTARIO"]:
-                bd[c]=None
-
-            bd.to_parquet(RUTA_MASTER,index=False)
+            st.success("Actividad creada")
             st.rerun()
 
-    else:
+    actividades = master["ACTIVIDAD_COMERCIAL"].dropna().unique()
+    actividades = [a for a in actividades if a != ""]
 
-        actividad = st.selectbox("Actividad",actividades)
+    if len(actividades) > 0:
 
-        df = master[master["ACTIVIDAD_COMERCIAL"]==actividad]
+        ac = st.selectbox("Actividad", actividades)
 
-        st.dataframe(df,use_container_width=True)
+        df = master[master["ACTIVIDAD_COMERCIAL"] == ac]
 
-        if rol in ["ADC","JEFE_ADC"]:
+        st.dataframe(df)
 
-            archivo = st.file_uploader("Subir Excel")
+        st.download_button(
+            "⬇️ Descargar esta AC",
+            df.to_parquet(index=False),
+            file_name=f"{ac}.parquet"
+        )
 
-            if archivo:
+    st.subheader("DESCARGA TOTAL")
 
-                df_user = pd.read_excel(archivo)
-                df_user = normalizar_columnas(df_user)
+    st.download_button(
+        "⬇️ Descargar MASTER completo",
+        master.to_parquet(index=False),
+        file_name="MASTER_TOTAL.parquet"
+    )
 
-                pk = detectar_pk(df_user)
+# =============================
+# ROLES USUARIO
+# =============================
+else:
 
-                df_user["ACTIVIDAD_COMERCIAL"]=actividad
+    st.header("ROL USUARIO")
 
-                ruta=f"data/trabajo_{usuario}_{actividad}.parquet"
+    actividades = master["ACTIVIDAD_COMERCIAL"].dropna().unique()
+    actividades = [a for a in actividades if a != ""]
 
-                df_user[[pk,"ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]].to_parquet(ruta,index=False)
+    if len(actividades) == 0:
+        st.warning("No existen actividades")
+        st.stop()
 
-                if st.button("CARGAR CAMBIOS"):
-                    consolidar(actividad)
-                    st.success("Cambios aplicados")
+    ac = st.selectbox("Actividad", actividades)
 
-        if rol=="MASTER":
+    df = master[master["ACTIVIDAD_COMERCIAL"] == ac]
 
-            col1,col2=st.columns(2)
+    st.download_button(
+        "⬇️ Descargar Base",
+        df.to_parquet(index=False),
+        file_name=f"{ac}.parquet"
+    )
 
-            with col1:
-                with open(RUTA_MASTER,"rb") as f:
-                    st.download_button("MASTER",f,file_name="MASTER.parquet")
-
-            with col2:
-                buffer=io.BytesIO()
-                df.to_parquet(buffer,index=False)
-                buffer.seek(0)
-
-                st.download_button("ACTIVIDAD",buffer,file_name=f"{actividad}.parquet")
+    if rol in ["ADC","JEFE_ADC"]:
+        consolidar(ac)
