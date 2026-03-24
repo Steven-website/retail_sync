@@ -35,7 +35,7 @@ def master_view():
         if not bd_actual.empty:
             st.success(f"✔ BD activa — {len(bd_actual):,} filas · {len(bd_actual.columns)} columnas")
             with st.expander("Vista previa BD actual"):
-                st.dataframe(bd_actual.head(100), use_container_width=True)
+                st.dataframe(bd_actual.head(100), width="stretch")
         else:
             st.warning("⚠️ No hay BD cargada. Sube un archivo .parquet para comenzar.")
 
@@ -147,7 +147,7 @@ def master_view():
             st.divider()
             df = dataset_actividad(ac)
             st.caption(f"Mostrando hasta 2,000 registros de {len(df):,}")
-            st.dataframe(df.head(2000), use_container_width=True)
+            st.dataframe(df.head(2000), width="stretch")
 
     # =========================================================
     # TAB 4 — CONSOLIDACION
@@ -180,7 +180,7 @@ def master_view():
                 st.warning("La actividad no tiene datos.")
             else:
                 st.caption(f"Registros: {len(df):,}")
-                st.dataframe(df.head(2000), use_container_width=True)
+                st.dataframe(df.head(2000), width="stretch")
                 st.divider()
 
                 col1, col2 = st.columns(2)
