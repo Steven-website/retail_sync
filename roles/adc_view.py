@@ -43,7 +43,7 @@ def adc_view():
 
     st.subheader(f"📊 Base operativa — {ac}")
     st.caption(f"Registros disponibles: {len(df):,}")
-    st.dataframe(df, use_container_width=True, height=500)
+    st.dataframe(df, width="stretch", height=500)
     st.divider()
 
     # ===============================
@@ -63,11 +63,10 @@ def adc_view():
 
     # ===============================
     # SUBIR ARCHIVO
-    # CORRECCIÓN: key dinámica para poder resetear el uploader
+    # FIX: key dinámica para resetear el uploader correctamente tras rerun
     # ===============================
     st.subheader("📤 Subir archivo trabajado")
 
-    # Inicializar contador de uploader en session_state
     if "adc_upload_key" not in st.session_state:
         st.session_state.adc_upload_key = 0
 
@@ -93,7 +92,7 @@ def adc_view():
                         familias_permitidas=familias_usuario
                     )
                 st.success("✔ Información actualizada correctamente")
-                # CORRECCIÓN: incrementar key para resetear uploader limpiamente
+                # FIX: incrementar key para que el uploader se limpie limpiamente
                 st.session_state.adc_upload_key += 1
                 st.rerun()
             except Exception as e:
