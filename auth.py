@@ -1,7 +1,12 @@
 import json
 import streamlit as st
-from config import SESSION_DEFAULTS, RUTA_USERS
-
+from config import (
+    SESSION_DEFAULTS,
+    RUTA_USERS,
+    ROL_MASTER,
+    FILTRO_FAMILIAS_ACTIVO,
+    ROLES_SIN_FILTRO_FAMILIA
+)
 
 # ==========================================
 # INICIALIZAR SESSION STATE
@@ -16,11 +21,37 @@ def init_session():
 # CARGAR USUARIOS
 # ==========================================
 def cargar_usuarios():
-    try:
-        with open(RUTA_USERS, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
+    if not st.session_state.get("_users_cache"):
+        try:
+            with open(RUTA_USERS, "r", encoding="utf-8") as f:
+                st.session_state._users_cache = json.load(f)
+        except Exception as e:
+            st.error(f"Error leyendo usuarios.json: {e}")
+            st.stop()
+
+    return st.session_state._users_cache
+
+
+# ==========================================
+# NORMALIZAR FAMILIAS
+# ==========================================
+def _normalizar_familias(familias):
+
+    if familias is None:
         return []
+
+    if isinstance(familias, str):
+        familias = familias.split(",")
+
+    familias_ok = []
+    for f in familias:
+        if f is None:
+            continue
+        f = str(f).strip().upper()
+        if f:
+            familias_ok.append(f)
+
+    return familias_ok
 
 
 # ==========================================
@@ -35,25 +66,35 @@ def login_view():
 
     if st.button("Ingresar"):
 
+        if not usuario or not password:
+            st.warning("Debe ingresar usuario y contraseña")
+            return
+
         usuarios = cargar_usuarios()
 
         user_ok = None
         for u in usuarios:
-            if u["usuario"] == usuario and u["password"] == password:
+            if (
+                str(u.get("usuario", "")).strip().lower()
+                == usuario.strip().lower()
+                and str(u.get("password", "")).strip() == password.strip()
+            ):
                 user_ok = u
                 break
 
         if user_ok:
 
+            rol = user_ok.get("rol")
+
             st.session_state.login = True
             st.session_state.usuario = user_ok["usuario"]
-            st.session_state.rol = user_ok["rol"]
+            st.session_state.rol = rol
 
-            # Familias puede ser string o lista
-            familias = user_ok.get("FAMILIA", [])
-
-            if isinstance(familias, str):
-                familias = [familias]
+            # 🔥 CONTROL CENTRAL FILTRO FAMILIAS
+            if FILTRO_FAMILIAS_ACTIVO and rol not in ROLES_SIN_FILTRO_FAMILIA:
+                familias = _normalizar_familias(user_ok.get("FAMILIA"))
+            else:
+                familias = []
 
             st.session_state.familias = familias
 
@@ -72,6 +113,9 @@ def sidebar_usuario():
 
         st.success(f"Usuario: {st.session_state.usuario}")
         st.info(f"Rol: {st.session_state.rol}")
+
+        if st.session_state.rol != ROL_MASTER:
+            st.caption(f"Familias: {', '.join(st.session_state.familias)}")
 
         if st.button("Cerrar sesión"):
             cerrar_sesion()
