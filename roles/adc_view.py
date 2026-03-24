@@ -17,6 +17,13 @@ def adc_view():
         return
 
     familias_usuario = st.session_state.familias
+    if isinstance(familias_usuario, str):
+        familias_usuario = [familias_usuario]
+
+    familias_usuario = [str(x).strip() for x in familias_usuario if str(x).strip()]
+    if not familias_usuario:
+        st.error("Usuario ADC sin familias válidas asignadas")
+        return
 
     # ===============================
     # OBTENER ACTIVIDADES

@@ -1,5 +1,6 @@
 import io
 import os
+import unicodedata
 import pandas as pd
 from config import (
     RUTA_BD,
@@ -26,6 +27,16 @@ def _leer_parquet_seguro(ruta: str) -> pd.DataFrame:
     if not os.path.exists(ruta):
         return pd.DataFrame()
     return pd.read_parquet(ruta)
+
+
+def _normalizar_texto(valor) -> str:
+    if pd.isna(valor):
+        return ""
+
+    txt = str(valor).strip().upper()
+    txt = unicodedata.normalize("NFKD", txt)
+    txt = "".join(c for c in txt if not unicodedata.combining(c))
+    return txt
 
 
 # =====================================================
@@ -222,17 +233,22 @@ def regenerar_todas_las_actividades() -> pd.DataFrame:
 # FILTROS / CONSOLIDADOS
 # =====================================================
 def filtrar_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
-    if df.empty or not familias:
+    if df.empty:
         return df.copy()
 
     if CAMPO_FAMILIA not in df.columns:
-        return df.copy()
+        return df.iloc[0:0].copy()
 
-    familias_limpias = [str(x).strip() for x in familias if str(x).strip()]
-    if not familias_limpias:
-        return df.copy()
+    familias_norm = {
+        _normalizar_texto(x)
+        for x in (familias or [])
+        if _normalizar_texto(x)
+    }
+    if not familias_norm:
+        return df.iloc[0:0].copy()
 
-    return df[df[CAMPO_FAMILIA].astype(str).str.strip().isin(familias_limpias)].copy()
+    familias_df = df[CAMPO_FAMILIA].apply(_normalizar_texto)
+    return df[familias_df.isin(familias_norm)].copy()
 
 
 def consolidar(nombre: str) -> pd.DataFrame:
