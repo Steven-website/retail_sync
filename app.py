@@ -6,10 +6,6 @@ import os
 st.set_page_config(layout="wide")
 st.title("🛒 Retail Sync")
 
-# =========================
-# CONFIG
-# =========================
-
 RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 RUTA_MASTER = "data/master.parquet"
 RUTA_USERS = "usuarios.json"
@@ -27,9 +23,7 @@ COLUMNAS_COMERCIALES = [
     "COMENTARIO"
 ]
 
-# =========================
-# LOGIN
-# =========================
+# ================= LOGIN =================
 
 if "login" not in st.session_state:
     st.session_state.login = False
@@ -55,12 +49,10 @@ if not st.session_state.login:
 
 rol = st.session_state.rol
 
-st.sidebar.success(f"Usuario: {st.session_state.usuario}")
-st.sidebar.info(f"Rol: {rol}")
+st.sidebar.success(st.session_state.usuario)
+st.sidebar.info(rol)
 
-# =========================
-# BASE UNIVERSO
-# =========================
+# ================= BD =================
 
 def cargar_bd():
 
@@ -71,15 +63,13 @@ def cargar_bd():
     df = pd.read_parquet(RUTA_BD)
 
     if PK not in df.columns:
-        st.error("BD_ACTUALIZACION no tiene PK_Articulos")
+        st.error("BD sin PK_Articulos")
         st.stop()
 
     return df
 
 
-# =========================
-# MASTER
-# =========================
+# ================= MASTER =================
 
 def crear_master():
 
@@ -103,7 +93,6 @@ def cargar_master():
 
     master = pd.read_parquet(RUTA_MASTER)
 
-    # blindaje columnas comerciales
     for c in COLUMNAS_COMERCIALES:
         if c not in master.columns:
             master[c] = None
@@ -111,9 +100,7 @@ def cargar_master():
     return master
 
 
-# =========================
-# RECONSTRUIR MASTER
-# =========================
+# ================= ACTUALIZAR =================
 
 def actualizar_master():
 
@@ -137,11 +124,14 @@ def actualizar_master():
         nuevo = bd.copy()
         nuevo.insert(1, "ACTIVIDAD_COMERCIAL", ac)
 
-        cols_merge = [PK] + [c for c in COLUMNAS_COMERCIALES if c in base_ac.columns]
+        # merge tolerante
+        if PK in base_ac.columns:
 
-        base_usuario = base_ac[cols_merge]
+            cols_usuario = [PK] + [c for c in COLUMNAS_COMERCIALES if c in base_ac.columns]
 
-        nuevo = nuevo.merge(base_usuario, on=PK, how="left")
+            base_usuario = base_ac[cols_usuario]
+
+            nuevo = nuevo.merge(base_usuario, on=PK, how="left")
 
         nuevo_master.append(nuevo)
 
@@ -150,9 +140,7 @@ def actualizar_master():
         master.to_parquet(RUTA_MASTER, index=False)
 
 
-# =========================
-# CONSOLIDAR
-# =========================
+# ================= CONSOLIDAR =================
 
 def consolidar(ac):
 
@@ -181,17 +169,13 @@ def consolidar(ac):
         st.success("Cambios aplicados")
 
 
-# =========================
-# EJECUCION
-# =========================
+# ================= EJECUCION =================
 
 actualizar_master()
 
 master = cargar_master()
 
-# =========================
-# MASTER
-# =========================
+# ================= MASTER =================
 
 if rol == "MASTER":
 
@@ -241,9 +225,7 @@ if rol == "MASTER":
         file_name="MASTER.parquet"
     )
 
-# =========================
-# USUARIOS
-# =========================
+# ================= USUARIOS =================
 
 else:
 
