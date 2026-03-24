@@ -2,31 +2,26 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-from data_manager import dataset_actividad, filtrar_familias, actualizar_desde_excel, obtener_actividades
+from data_manager import (
+    dataset_actividad,
+    filtrar_familias,
+    actualizar_actividad_desde_excel,
+    obtener_actividades
+)
 
 
 def adc_view():
 
     st.header("🧑‍💻 Rol ADC")
 
-    # ===============================
-    # VALIDAR SESSION
-    # ===============================
-    if "familias" not in st.session_state:
-        st.error("No hay familias asignadas al usuario")
-        return
-
     familias_usuario = st.session_state.familias
-    if isinstance(familias_usuario, str):
-        familias_usuario = [familias_usuario]
 
-    familias_usuario = [str(x).strip() for x in familias_usuario if str(x).strip()]
     if not familias_usuario:
-        st.error("Usuario ADC sin familias válidas asignadas")
+        st.error("Usuario sin familias asignadas")
         return
 
     # ===============================
-    # OBTENER ACTIVIDADES
+    # ACTIVIDADES
     # ===============================
     actividades = obtener_actividades()
 
@@ -34,43 +29,34 @@ def adc_view():
         st.warning("No existen actividades comerciales")
         return
 
-    # ===============================
-    # SELECCIONAR ACTIVIDAD
-    # ===============================
     ac = st.selectbox(
         "Seleccione Actividad Comercial",
         actividades
     )
 
     # ===============================
-    # CARGAR DATASET
+    # DATASET
     # ===============================
     df = dataset_actividad(ac)
 
-    if df is None or df.empty:
-        st.warning("La actividad no tiene datos")
+    if df.empty:
+        st.warning("Actividad sin datos")
         return
 
-    # ===============================
-    # FILTRAR POR FAMILIAS
-    # ===============================
     df = filtrar_familias(df, familias_usuario)
 
     if df.empty:
-        st.warning("No hay datos para sus familias asignadas")
+        st.warning("No hay artículos para sus familias")
         return
 
-    st.subheader("Base operativa")
-
+    st.subheader(f"Base operativa — {ac}")
     st.dataframe(df, use_container_width=True)
 
     st.divider()
 
     # ===============================
-    # DESCARGAR EXCEL REAL
+    # DESCARGAR
     # ===============================
-    st.subheader("Descargar base")
-
     buffer = BytesIO()
     df.to_excel(buffer, index=False)
     buffer.seek(0)
@@ -85,21 +71,31 @@ def adc_view():
     st.divider()
 
     # ===============================
-    # SUBIR ARCHIVO TRABAJADO
+    # SUBIR
     # ===============================
     st.subheader("Subir archivo trabajado")
 
     file = st.file_uploader(
-        "Subir Excel",
+        "Subir Excel trabajado",
         type=["xlsx"]
     )
 
-    if file is not None:
+    if file:
 
-        if st.button("Actualizar información"):
+        if st.button("Aplicar actualización"):
 
             try:
-                actualizar_desde_excel(file, ac, familias_usuario)
+
+                with st.spinner("Procesando actualización..."):
+
+                    base_excel = pd.read_excel(file)
+
+                    actualizar_actividad_desde_excel(
+                        nombre=ac,
+                        base_excel=base_excel,
+                        familias_permitidas=familias_usuario
+                    )
+
                 st.success("Actualización aplicada correctamente")
                 st.rerun()
 
