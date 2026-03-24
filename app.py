@@ -13,7 +13,22 @@ RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 
 
 # =====================================================
-# CREAR MASTER VACIO
+# UTIL
+# =====================================================
+def normalizar_columnas(df):
+    df.columns = df.columns.str.strip()
+    return df
+
+
+def detectar_pk(df):
+    for c in df.columns:
+        if c.upper().replace(" ", "") in ["PK_ARTICULOS", "PKARTICULOS"]:
+            return c
+    return None
+
+
+# =====================================================
+# CREAR MASTER
 # =====================================================
 def crear_master_vacio():
 
@@ -23,6 +38,9 @@ def crear_master_vacio():
         return
 
     bd = pd.read_parquet(RUTA_BD)
+    bd = normalizar_columnas(bd)
+
+    pk = detectar_pk(bd)
 
     columnas = bd.columns.tolist()
     columnas.insert(1,"ACTIVIDAD_COMERCIAL")
@@ -41,7 +59,7 @@ if not os.path.exists(RUTA_MASTER):
 
 
 # =====================================================
-# ACTUALIZAR MASTER (UNIVERSO = BD)
+# ACTUALIZAR MASTER
 # =====================================================
 def actualizar_master():
 
@@ -54,6 +72,14 @@ def actualizar_master():
     master = pd.read_parquet(RUTA_MASTER)
     bd = pd.read_parquet(RUTA_BD)
 
+    master = normalizar_columnas(master)
+    bd = normalizar_columnas(bd)
+
+    pk = detectar_pk(bd)
+    if pk is None:
+        st.error("No se detecta PK en BD_ACTUALIZACION")
+        return
+
     if master.empty:
         return
 
@@ -62,7 +88,6 @@ def actualizar_master():
         "FECHA_INICIO","FECHA_FIN","ACCION","COMENTARIO"
     ]
 
-    # asegurar columnas comerciales
     for col in columnas_comerciales:
         if col not in master.columns:
             master[col] = None
@@ -78,12 +103,11 @@ def actualizar_master():
         nuevo = bd.copy()
         nuevo.insert(1,"ACTIVIDAD_COMERCIAL",ac)
 
-        cols_merge = ["PK_Articulos"] + columnas_comerciales
-        cols_merge = [c for c in cols_merge if c in base_ac.columns]
+        cols_merge = [pk] + [c for c in columnas_comerciales if c in base_ac.columns]
 
         nuevo = nuevo.merge(
             base_ac[cols_merge],
-            on="PK_Articulos",
+            on=pk,
             how="left"
         )
 
@@ -95,22 +119,25 @@ def actualizar_master():
 
 
 # =====================================================
-# CONSOLIDAR CAMBIOS
+# CONSOLIDAR
 # =====================================================
 def consolidar(actividad):
 
     master = pd.read_parquet(RUTA_MASTER)
+    master = normalizar_columnas(master)
+
+    pk = detectar_pk(master)
 
     for archivo in os.listdir("data"):
 
         if archivo.startswith("trabajo_") and actividad in archivo:
 
-            ruta = os.path.join("data",archivo)
-            temp = pd.read_parquet(ruta)
+            temp = pd.read_parquet(os.path.join("data",archivo))
+            temp = normalizar_columnas(temp)
 
             master = master.merge(
                 temp,
-                on=["PK_Articulos","ACTIVIDAD_COMERCIAL"],
+                on=[pk,"ACTIVIDAD_COMERCIAL"],
                 how="left",
                 suffixes=("","_NEW")
             )
@@ -158,102 +185,39 @@ else:
     rol = st.session_state.user["rol"]
 
     master = pd.read_parquet(RUTA_MASTER)
+    master = normalizar_columnas(master)
 
     st.success(f"Bienvenido {usuario}")
 
-    # =================================================
-    # MASTER VACIO
-    # =================================================
-    if master.empty:
+    actividades = master["ACTIVIDAD_COMERCIAL"].dropna().unique()
 
-        if rol != "MASTER":
-            st.warning("No existen Actividades")
-            st.stop()
+    if len(actividades) == 0 and rol == "MASTER":
 
         nueva = st.text_input("Crear Primera Actividad")
 
         if st.button("CREAR"):
 
             bd = pd.read_parquet(RUTA_BD)
+            bd = normalizar_columnas(bd)
 
             bd.insert(1,"ACTIVIDAD_COMERCIAL",nueva)
 
-            bd["MUNDO_AC"]=None
-            bd["PRECIO_PROMOCIONAL"]=None
-            bd["DESCUENTO"]=None
-            bd["PORC_AHORRO"]=None
-            bd["FECHA_INICIO"]=None
-            bd["FECHA_FIN"]=None
-            bd["ACCION"]=None
-            bd["COMENTARIO"]=None
+            for c in ["MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO",
+                      "PORC_AHORRO","FECHA_INICIO","FECHA_FIN",
+                      "ACCION","COMENTARIO"]:
+                bd[c]=None
 
             bd.to_parquet(RUTA_MASTER,index=False)
-
-            st.success("Actividad creada")
             st.rerun()
 
     else:
 
-        if rol == "MASTER":
+        actividad = st.selectbox("Actividad",actividades)
 
-            nueva = st.text_input("Nueva Actividad")
-
-            if st.button("CREAR ACTIVIDAD"):
-
-                bd = pd.read_parquet(RUTA_BD)
-
-                bd.insert(1,"ACTIVIDAD_COMERCIAL",nueva)
-
-                bd["MUNDO_AC"]=None
-                bd["PRECIO_PROMOCIONAL"]=None
-                bd["DESCUENTO"]=None
-                bd["PORC_AHORRO"]=None
-                bd["FECHA_INICIO"]=None
-                bd["FECHA_FIN"]=None
-                bd["ACCION"]=None
-                bd["COMENTARIO"]=None
-
-                master = pd.concat([master,bd],ignore_index=True)
-                master.to_parquet(RUTA_MASTER,index=False)
-
-                st.success("Actividad creada")
-                st.rerun()
-
-        actividades = master["ACTIVIDAD_COMERCIAL"].unique()
-
-        actividad = st.selectbox("Seleccione Actividad",actividades)
-
-        df = master[master["ACTIVIDAD_COMERCIAL"] == actividad].copy()
-
-        if rol == "ADC":
-            fam = st.session_state.user.get("familia","ALL")
-            if fam != "ALL":
-                df = df[df["FAMILIA"] == fam]
+        df = master[master["ACTIVIDAD_COMERCIAL"]==actividad]
 
         st.dataframe(df,use_container_width=True)
 
-        # DESCARGAR EXCEL
-        buffer = io.BytesIO()
-        wb = Workbook()
-        ws = wb.active
-
-        for c,col in enumerate(df.columns,1):
-            ws.cell(row=1,column=c,value=col)
-
-        for r,row in enumerate(df.itertuples(index=False),2):
-            for c,val in enumerate(row,1):
-                ws.cell(row=r,column=c,value=val)
-
-        wb.save(buffer)
-        buffer.seek(0)
-
-        st.download_button(
-            "Descargar Excel",
-            data=buffer,
-            file_name=f"{actividad}_{usuario}.xlsx"
-        )
-
-        # SUBIR
         if rol in ["ADC","JEFE_ADC"]:
 
             archivo = st.file_uploader("Subir Excel")
@@ -261,34 +225,31 @@ else:
             if archivo:
 
                 df_user = pd.read_excel(archivo)
-                df_user["ACTIVIDAD_COMERCIAL"] = actividad
+                df_user = normalizar_columnas(df_user)
 
-                ruta = f"data/trabajo_{usuario}_{actividad}.parquet"
+                pk = detectar_pk(df_user)
 
-                df_user[["PK_Articulos","ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]].to_parquet(
-                    ruta,index=False
-                )
+                df_user["ACTIVIDAD_COMERCIAL"]=actividad
 
-                st.success("Archivo cargado")
+                ruta=f"data/trabajo_{usuario}_{actividad}.parquet"
+
+                df_user[[pk,"ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]].to_parquet(ruta,index=False)
 
                 if st.button("CARGAR CAMBIOS"):
                     consolidar(actividad)
                     st.success("Cambios aplicados")
 
-        # DESCARGA MASTER
-        if rol == "MASTER":
+        if rol=="MASTER":
 
-            col1,col2 = st.columns(2)
+            col1,col2=st.columns(2)
 
             with col1:
                 with open(RUTA_MASTER,"rb") as f:
-                    st.download_button("MASTER TOTAL",f,file_name="MASTER.parquet")
+                    st.download_button("MASTER",f,file_name="MASTER.parquet")
 
             with col2:
-                df_ac = master[master["ACTIVIDAD_COMERCIAL"] == actividad]
+                buffer=io.BytesIO()
+                df.to_parquet(buffer,index=False)
+                buffer.seek(0)
 
-                buffer_parquet = io.BytesIO()
-                df_ac.to_parquet(buffer_parquet,index=False)
-                buffer_parquet.seek(0)
-
-                st.download_button("Solo Actividad",buffer_parquet,file_name=f"{actividad}.parquet")
+                st.download_button("ACTIVIDAD",buffer,file_name=f"{actividad}.parquet")
