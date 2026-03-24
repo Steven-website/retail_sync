@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import io
 from data_manager import (
     obtener_actividades,
     dataset_actividad,
@@ -9,23 +10,28 @@ from data_manager import (
 )
 
 def _leer_csv(archivo) -> pd.DataFrame:
+    """Lee CSV detectando separador automáticamente y limpiando nombres de columnas."""
     for encoding in ["utf-8-sig", "utf-8", "latin-1"]:
-        try:
-            archivo.seek(0)
-            df = pd.read_csv(
-                archivo,
-                encoding=encoding,
-                sep=",",
-                quotechar='"',
-                quoting=0,
-                on_bad_lines="skip"
-            )
-            # Limpiar nombres de columnas — quitar espacios y BOM
-            df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
-            return df
-        except Exception:
-            continue
-    raise Exception("No se pudo leer el CSV.")
+        for sep in [",", ";", "\t"]:
+            try:
+                archivo.seek(0)
+                df = pd.read_csv(
+                    archivo,
+                    encoding=encoding,
+                    sep=sep,
+                    quotechar='"',
+                    quoting=0,
+                    on_bad_lines="skip"
+                )
+                # Si solo tiene 1 columna, el separador no era el correcto
+                if len(df.columns) <= 1:
+                    continue
+                # Limpiar nombres de columnas
+                df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
+                return df
+            except Exception:
+                continue
+    raise Exception("No se pudo leer el CSV. Verifique el archivo.")
 
 def adc_view():
     st.header("🧑‍💻 Panel ADC")
@@ -56,6 +62,7 @@ def adc_view():
     st.dataframe(df_filtrado, use_container_width=True, height=400)
     st.divider()
 
+    # Descargar CSV
     st.download_button(
         "⬇️ Descargar CSV para trabajar",
         data=a_csv(df_filtrado),
@@ -64,7 +71,6 @@ def adc_view():
     )
 
     st.divider()
-
     st.subheader("📤 Subir archivo trabajado")
     st.caption("Solo se actualizan sus familias. El resto permanece intacto.")
 
@@ -80,10 +86,10 @@ def adc_view():
     if archivo:
         try:
             preview = _leer_csv(archivo)
-            st.caption(f"Vista previa: {len(preview):,} filas — Columnas: {list(preview.columns[:5])}")
+            st.caption(f"Vista previa: {len(preview):,} filas · {len(preview.columns)} columnas")
             st.dataframe(preview.head(5), use_container_width=True)
         except Exception as e:
-            st.error(f"❌ No se pudo leer el archivo: {e}")
+            st.error(f"❌ {e}")
             return
 
         if st.button("✅ Actualizar BASE"):
