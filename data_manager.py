@@ -29,6 +29,9 @@ def _normalizar(valor) -> str:
     return "".join(c for c in txt if not unicodedata.combining(c))
 
 def _validar_pk(df: pd.DataFrame) -> pd.DataFrame:
+    # Limpiar nombres de columnas por si vienen con BOM o espacios
+    df = df.copy()
+    df.columns = df.columns.str.strip().str.replace("\ufeff", "", regex=False)
     df = df.copy()
     if PK not in df.columns:
         raise Exception(f"El archivo no tiene la columna '{PK}'.")
