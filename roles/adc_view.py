@@ -41,7 +41,7 @@ def adc_view():
 
     st.subheader(f"📊 Base operativa — {ac}")
     st.caption(f"Registros disponibles: {len(df):,}")
-    st.dataframe(df, use_container_width=True, height=450)
+    st.dataframe(df, width="stretch", height=450)
     st.divider()
 
     # =========================================================
@@ -79,7 +79,7 @@ def adc_view():
         try:
             preview = pd.read_excel(file)
             st.caption(f"Vista previa: {len(preview):,} filas")
-            st.dataframe(preview.head(10), use_container_width=True)
+            st.dataframe(preview.head(10), width="stretch")
             file.seek(0)  # resetear puntero para leer de nuevo al aplicar
         except Exception:
             pass
