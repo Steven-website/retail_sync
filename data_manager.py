@@ -28,12 +28,21 @@ def _asegurar_columnas_comerciales(df: pd.DataFrame) -> pd.DataFrame:
 def _leer_parquet_seguro(ruta: str) -> pd.DataFrame:
     if not os.path.exists(ruta):
         return pd.DataFrame()
-    return pd.read_parquet(ruta)
+    # FIX: capturar errores de lectura (archivo corrupto, permisos, etc.)
+    try:
+        return pd.read_parquet(ruta)
+    except Exception as e:
+        raise Exception(f"Error leyendo archivo parquet '{ruta}': {e}")
 
 
 def _normalizar_texto(valor) -> str:
-    if pd.isna(valor):
-        return ""
+    # FIX: pd.isna() lanza error si el valor es una lista u objeto no escalar
+    # Se agrega manejo seguro antes de llamar isna
+    try:
+        if pd.isna(valor):
+            return ""
+    except (TypeError, ValueError):
+        pass
 
     txt = str(valor).strip().upper()
     txt = unicodedata.normalize("NFKD", txt)
@@ -70,12 +79,20 @@ def leer_bd_actualizacion() -> pd.DataFrame:
 
 
 def guardar_bd_actualizacion_desde_upload(file) -> pd.DataFrame:
-    df = pd.read_parquet(file)
+    # FIX: capturar error de lectura del archivo subido
+    try:
+        df = pd.read_parquet(file)
+    except Exception as e:
+        raise Exception(f"No se pudo leer el archivo parquet: {e}")
 
     if PK not in df.columns:
         raise Exception(f"El parquet cargado no tiene la columna {PK}")
 
     df = _asegurar_pk_texto(df)
+
+    # FIX: eliminar duplicados en PK antes de guardar
+    df = df.drop_duplicates(subset=[PK], keep="last")
+
     df.to_parquet(RUTA_BD, index=False)
     return df
 
@@ -278,9 +295,14 @@ def filtrar_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
     if CAMPO_FAMILIA not in df.columns:
         return df.iloc[0:0].copy()
 
+    # FIX: si familias es None o vacío, retornar DataFrame vacío
+    # en lugar de explotar en el set comprehension
+    if not familias:
+        return df.iloc[0:0].copy()
+
     familias_norm = {
         _normalizar_texto(x)
-        for x in (familias or [])
+        for x in familias
         if _normalizar_texto(x)
     }
 
@@ -379,8 +401,10 @@ def actualizar_actividad_desde_excel(
     guardar_master(master_final)
 
 
+# FIX: consolidar ahora llama regenerar_actividad en lugar de solo leer datos
+# Esto hace que el botón "Consolidar" en las vistas realmente actualice la base
 def consolidar(nombre: str) -> pd.DataFrame:
-    return dataset_actividad(nombre)
+    return regenerar_actividad(nombre)
 
 
 # =====================================================
