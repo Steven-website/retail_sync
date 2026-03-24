@@ -8,13 +8,13 @@
     "usuario": "jefe1",
     "password": "123",
     "rol": "JEFE_ADC",
-    "FAMILIAS": ["ELECTRODOMESTICOS", "HOGAR", "BAZAR"]
+    "familias": ["ELECTRODOMESTICOS", "HOGAR", "BAZAR"]
   },
   {
     "usuario": "adc1",
     "password": "123",
     "rol": "ADC",
-    "FAMILIAS": ["ELECTRODOMESTICOS", "HOGAR"]
+    "familias": ["ELECTRODOMESTICOS", "HOGAR"]
   },
   {
     "usuario": "precios1",
