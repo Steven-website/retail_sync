@@ -227,6 +227,36 @@ else:
 
         df = master[master["ACTIVIDAD_COMERCIAL"] == actividad]
 
+        # =====================================
+# DESCARGA MASTER
+# =====================================
+if rol == "MASTER":
+
+    st.markdown("### 📦 Descargar Base Parquet")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.download_button(
+            "⬇️ Descargar MASTER TOTAL",
+            data=open(RUTA_MASTER, "rb"),
+            file_name="MASTER_TOTAL.parquet"
+        )
+
+    with col2:
+
+        df_ac = master[master["ACTIVIDAD_COMERCIAL"] == actividad]
+
+        buffer_parquet = io.BytesIO()
+        df_ac.to_parquet(buffer_parquet, index=False)
+        buffer_parquet.seek(0)
+
+        st.download_button(
+            "⬇️ Descargar Solo Actividad",
+            data=buffer_parquet,
+            file_name=f"MASTER_{actividad}.parquet"
+        )
+        
         if rol == "ADC":
             fam = st.session_state.user["familia"]
             df = df[df["FAMILIA"] == fam]
@@ -272,3 +302,4 @@ else:
                 if st.button("CARGAR CAMBIOS"):
                     consolidar(actividad)
                     st.success("Cambios aplicados")
+                
