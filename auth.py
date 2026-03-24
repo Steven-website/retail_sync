@@ -8,17 +8,11 @@ from config import (
     ROLES_SIN_FILTRO_FAMILIA
 )
 
-# ==========================================
-# INICIALIZAR SESSION STATE
-# ==========================================
 def init_session():
     for k, v in SESSION_DEFAULTS.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-# ==========================================
-# CARGAR USUARIOS
-# ==========================================
 def cargar_usuarios():
     if not st.session_state.get("_users_cache"):
         try:
@@ -29,9 +23,6 @@ def cargar_usuarios():
             st.stop()
     return st.session_state._users_cache
 
-# ==========================================
-# NORMALIZAR FAMILIAS
-# ==========================================
 def _normalizar_familias(familias):
     if familias is None:
         return []
@@ -46,12 +37,9 @@ def _normalizar_familias(familias):
             familias_ok.append(f)
     return familias_ok
 
-# ==========================================
-# LOGIN
-# ==========================================
 def login_view():
     st.title("🛒 Retail Sync")
-    usuario = st.text_input("Usuario")
+    usuario  = st.text_input("Usuario")
     password = st.text_input("Password", type="password")
 
     if st.button("Ingresar"):
@@ -60,12 +48,11 @@ def login_view():
             return
 
         usuarios = cargar_usuarios()
-        user_ok = None
+        user_ok  = None
 
         for u in usuarios:
             if (
-                str(u.get("usuario", "")).strip().lower()
-                == usuario.strip().lower()
+                str(u.get("usuario", "")).strip().lower() == usuario.strip().lower()
                 and str(u.get("password", "")).strip() == password.strip()
             ):
                 user_ok = u
@@ -73,9 +60,9 @@ def login_view():
 
         if user_ok:
             rol = user_ok.get("rol")
-            st.session_state.login = True
+            st.session_state.login   = True
             st.session_state.usuario = user_ok["usuario"]
-            st.session_state.rol = rol
+            st.session_state.rol     = rol
 
             if FILTRO_FAMILIAS_ACTIVO and rol not in ROLES_SIN_FILTRO_FAMILIA:
                 familias = _normalizar_familias(user_ok.get("FAMILIA"))
@@ -87,16 +74,12 @@ def login_view():
         else:
             st.error("Credenciales incorrectas")
 
-# ==========================================
-# SIDEBAR INFO
-# ==========================================
 def sidebar_usuario():
     with st.sidebar:
         st.success(f"Usuario: {st.session_state.usuario}")
         st.info(f"Rol: {st.session_state.rol}")
         if st.session_state.rol != ROL_MASTER:
             familias = st.session_state.familias
-            # CORRECCIÓN: evita crash si familias es None
             if familias:
                 st.caption(f"Familias: {', '.join(familias)}")
             else:
@@ -104,13 +87,9 @@ def sidebar_usuario():
         if st.button("Cerrar sesión"):
             cerrar_sesion()
 
-# ==========================================
-# LOGOUT
-# ==========================================
 def cerrar_sesion():
     for k in SESSION_DEFAULTS.keys():
         st.session_state[k] = SESSION_DEFAULTS[k]
-    # CORRECCIÓN: limpiar cache de usuarios para que se relean cambios
     if "_users_cache" in st.session_state:
         del st.session_state["_users_cache"]
     st.rerun()
