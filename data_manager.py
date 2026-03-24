@@ -1,198 +1,277 @@
-import streamlit as st
-import json
 import io
-from auth import cargar_usuarios, guardar_usuarios
-from config import ROLES_DISPONIBLES, FAMILIAS_DISPONIBLES
-from data_manager import (
-    leer_bd, subir_bd, leer_base,
-    obtener_actividades,
-    crear_actividad, eliminar_actividad, regenerar_actividad,
-    dataset_actividad, a_parquet,
+import os
+import unicodedata
+from typing import Optional, List
+import pandas as pd
+from config import (
+    RUTA_BD, RUTA_BASE, PK,
+    CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
+    COLUMNAS_COMERCIALES,
 )
 
-def master_view():
-    st.header("👑 Panel MASTER")
+# ─── HELPERS ──────────────────────────────────────────────
+def _leer_parquet(ruta: str) -> pd.DataFrame:
+    if not os.path.exists(ruta):
+        return pd.DataFrame()
+    try:
+        return pd.read_parquet(ruta)
+    except Exception as e:
+        raise Exception(f"Error leyendo archivo: {e}")
 
-    tab_bd, tab_actividades, tab_usuarios, tab_descargas = st.tabs([
-        "📂 BD", "⚙️ Actividades", "👥 Usuarios", "⬇️ Descargas"
-    ])
+def _normalizar(valor) -> str:
+    try:
+        if pd.isna(valor):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    txt = str(valor).strip().upper()
+    txt = unicodedata.normalize("NFKD", txt)
+    return "".join(c for c in txt if not unicodedata.combining(c))
 
-    # ── TAB BD ────────────────────────────────────────────
-    with tab_bd:
-        st.subheader("BD_ACTUALIZACION")
-        bd = leer_bd()
-        if not bd.empty:
-            st.success(f"✔ BD cargada — {len(bd):,} filas · {len(bd.columns)} columnas")
-        else:
-            st.warning("⚠️ No hay BD cargada. Suba un archivo .parquet para comenzar.")
+def _limpiar_columnas(df: pd.DataFrame) -> pd.DataFrame:
+    """Limpia nombres de columnas — quita BOM, espacios y caracteres invisibles."""
+    df = df.copy()
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.replace('\ufeff', '', regex=False)
+        .str.replace('\u200b', '', regex=False)
+    )
+    return df
 
-        archivo = st.file_uploader("Subir BD (.parquet)", type=["parquet"])
-        if archivo:
-            if st.button("💾 Guardar BD"):
-                try:
-                    df = subir_bd(archivo)
-                    st.success(f"✔ BD guardada — {len(df):,} filas")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")
+def _validar_pk(df: pd.DataFrame) -> pd.DataFrame:
+    df = _limpiar_columnas(df)
+    if PK not in df.columns:
+        raise Exception(f"El archivo no tiene la columna '{PK}'. Columnas encontradas: {list(df.columns[:5])}")
+    # Convertir PK a string limpio — maneja enteros, floats y strings
+    df[PK] = (
+        df[PK]
+        .apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x).strip() not in ["", "nan"] else "")
+        .str.strip()
+    )
+    return df
 
-    # ── TAB ACTIVIDADES ───────────────────────────────────
-    with tab_actividades:
-        st.subheader("Crear actividad comercial")
-        nombre = st.text_input("Nombre de la actividad")
-        if st.button("➕ Crear"):
-            if not nombre.strip():
-                st.warning("Escriba un nombre.")
-            else:
-                try:
-                    crear_actividad(nombre)
-                    st.success(f"✔ Actividad '{nombre}' creada.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")
+def _agregar_cols_comerciales(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for col in COLUMNAS_COMERCIALES:
+        if col not in df.columns:
+            df[col] = None
+    return df
 
-        st.divider()
-        actividades = obtener_actividades()
-        if not actividades:
-            st.info("No hay actividades creadas aún.")
-        else:
-            ac = st.selectbox("Seleccione actividad", actividades, key="ac_gestion")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔄 Regenerar"):
-                    try:
-                        regenerar_actividad(ac)
-                        st.success(f"✔ '{ac}' regenerada.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ {e}")
-            with col2:
-                confirmar = st.checkbox("Confirmar eliminación")
-                if st.button("🗑️ Eliminar"):
-                    if not confirmar:
-                        st.warning("Marque la casilla primero.")
-                    else:
-                        try:
-                            eliminar_actividad(ac)
-                            st.success(f"✔ '{ac}' eliminada.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ {e}")
+def a_csv(df: pd.DataFrame) -> bytes:
+    buf = io.BytesIO()
+    df.to_csv(buf, index=False, encoding="utf-8-sig")
+    buf.seek(0)
+    return buf.getvalue()
 
-    # ── TAB USUARIOS ──────────────────────────────────────
-    with tab_usuarios:
-        usuarios = cargar_usuarios()
+def a_parquet(df: pd.DataFrame) -> bytes:
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False)
+    buf.seek(0)
+    return buf.getvalue()
 
-        # ── Botón descargar JSON ──────────────────────────
-        st.subheader("Usuarios existentes")
-        st.caption("⚠️ Cuando cree o elimine usuarios, descargue el JSON y súbalo a GitHub para que no se pierdan al reiniciar la app.")
+# ─── BD_ACTUALIZACION ─────────────────────────────────────
+def leer_bd() -> pd.DataFrame:
+    df = _leer_parquet(RUTA_BD)
+    if df.empty:
+        return df
+    return _validar_pk(df)
 
-        json_bytes = json.dumps(usuarios, ensure_ascii=False, indent=2).encode("utf-8")
-        st.download_button(
-            "⬇️ Descargar usuarios.json para GitHub",
-            data=json_bytes,
-            file_name="usuarios.json",
-            mime="application/json"
-        )
+def subir_bd(file) -> pd.DataFrame:
+    try:
+        df = pd.read_parquet(file)
+    except Exception as e:
+        raise Exception(f"No se pudo leer el parquet: {e}")
+    df = _validar_pk(df)
+    df = df.drop_duplicates(subset=[PK], keep="last")
+    df.to_parquet(RUTA_BD, index=False)
+    return df
 
-        st.divider()
+# ─── BASE ─────────────────────────────────────────────────
+def leer_base() -> pd.DataFrame:
+    base = _leer_parquet(RUTA_BASE)
+    if base.empty:
+        return base
+    base = _limpiar_columnas(base)
+    base = _agregar_cols_comerciales(base)
+    base = _validar_pk(base)
+    if CAMPO_ACTIVIDAD not in base.columns:
+        base[CAMPO_ACTIVIDAD] = ""
+    base[CAMPO_ACTIVIDAD] = base[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
+    return base
 
-        if not usuarios:
-            st.info("No hay usuarios.")
-        else:
-            for i, u in enumerate(usuarios):
-                with st.expander(f"👤 {u['usuario']} — {u['rol']}"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        nuevo_pwd = st.text_input(
-                            "Nueva contraseña",
-                            key=f"pwd_{i}",
-                            placeholder="Dejar vacío para no cambiar"
-                        )
-                        nuevo_rol = st.selectbox(
-                            "Rol",
-                            ROLES_DISPONIBLES,
-                            index=ROLES_DISPONIBLES.index(u["rol"]) if u["rol"] in ROLES_DISPONIBLES else 0,
-                            key=f"rol_{i}"
-                        )
-                    with col2:
-                        nuevas_fam = st.multiselect(
-                            "Familias",
-                            FAMILIAS_DISPONIBLES,
-                            default=[f for f in u.get("familias", []) if f in FAMILIAS_DISPONIBLES],
-                            key=f"fam_{i}"
-                        )
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        if st.button("💾 Guardar", key=f"save_{i}"):
-                            usuarios[i]["rol"]      = nuevo_rol
-                            usuarios[i]["familias"] = nuevas_fam
-                            if nuevo_pwd.strip():
-                                usuarios[i]["password"] = nuevo_pwd.strip()
-                            guardar_usuarios(usuarios)
-                            st.success("✔ Guardado. Descargue el JSON y súbalo a GitHub.")
-                            st.rerun()
-                    with c2:
-                        if u["usuario"] != "admin":
-                            if st.button("🗑️ Eliminar", key=f"del_{i}"):
-                                usuarios.pop(i)
-                                guardar_usuarios(usuarios)
-                                st.success("✔ Eliminado. Descargue el JSON y súbalo a GitHub.")
-                                st.rerun()
+def _guardar_base(df: pd.DataFrame):
+    df = _limpiar_columnas(df)
+    df = _agregar_cols_comerciales(df)
+    df = _validar_pk(df)
+    if CAMPO_ACTIVIDAD not in df.columns:
+        df[CAMPO_ACTIVIDAD] = ""
+    df[CAMPO_ACTIVIDAD] = df[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
+    df.to_parquet(RUTA_BASE, index=False)
 
-        st.divider()
-        st.subheader("Crear nuevo usuario")
-        nu  = st.text_input("Usuario", key="nu")
-        np_ = st.text_input("Contraseña", type="password", key="np")
-        nr  = st.selectbox("Rol", ROLES_DISPONIBLES, key="nr")
-        nf  = st.multiselect("Familias", FAMILIAS_DISPONIBLES, key="nf")
+# ─── ACTIVIDADES ──────────────────────────────────────────
+def obtener_actividades() -> list:
+    base = leer_base()
+    if base.empty:
+        return []
+    ac = base[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
+    return sorted(ac[ac != ""].unique().tolist())
 
-        if st.button("➕ Crear usuario"):
-            if not nu.strip() or not np_.strip():
-                st.warning("Complete usuario y contraseña.")
-            else:
-                usuarios = cargar_usuarios()
-                if any(u["usuario"].lower() == nu.strip().lower() for u in usuarios):
-                    st.error("Ya existe un usuario con ese nombre.")
-                else:
-                    usuarios.append({
-                        "usuario":  nu.strip(),
-                        "password": np_.strip(),
-                        "rol":      nr,
-                        "familias": nf,
-                    })
-                    guardar_usuarios(usuarios)
-                    st.success(f"✔ Usuario '{nu}' creado. Descargue el JSON y súbalo a GitHub.")
-                    st.rerun()
+def crear_actividad(nombre: str) -> pd.DataFrame:
+    nombre = nombre.strip()
+    if not nombre:
+        raise Exception("El nombre no puede estar vacío.")
+    bd = leer_bd()
+    if bd.empty:
+        raise Exception("No hay BD_ACTUALIZACION cargada. Súbala primero en la tab BD.")
+    if nombre in obtener_actividades():
+        raise Exception(f"La actividad '{nombre}' ya existe.")
+    base  = leer_base()
+    nueva = bd.copy()
+    nueva.insert(1, CAMPO_ACTIVIDAD, nombre)
+    nueva = _agregar_cols_comerciales(nueva)
+    nueva = _validar_pk(nueva)
+    nueva = nueva.drop_duplicates(subset=[PK], keep="last")
+    if not base.empty:
+        for col in base.columns:
+            if col not in nueva.columns:
+                nueva[col] = None
+        for col in nueva.columns:
+            if col not in base.columns:
+                base[col] = None
+        nueva = nueva[base.columns]
+        base  = pd.concat([base, nueva], ignore_index=True)
+    else:
+        base = nueva
+    _guardar_base(base)
+    return base
 
-    # ── TAB DESCARGAS ─────────────────────────────────────
-    with tab_descargas:
-        st.subheader("Descargas en parquet")
-        actividades = obtener_actividades()
+def eliminar_actividad(nombre: str):
+    base = leer_base()
+    if base.empty:
+        raise Exception("No existe BASE.")
+    if nombre not in obtener_actividades():
+        raise Exception(f"La actividad '{nombre}' no existe.")
+    base = base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() != nombre].copy()
+    _guardar_base(base)
 
-        if actividades:
-            st.markdown("**Por actividad**")
-            ac_dl = st.selectbox("Seleccione actividad", actividades, key="ac_dl")
-            df_ac = dataset_actividad(ac_dl)
-            if not df_ac.empty:
-                st.download_button(
-                    "⬇️ Descargar actividad (.parquet)",
-                    data=a_parquet(df_ac),
-                    file_name=f"{ac_dl}.parquet",
-                    mime="application/octet-stream",
-                    key="dl_ac"
-                )
-            st.divider()
+def regenerar_actividad(nombre: str) -> pd.DataFrame:
+    nombre = nombre.strip()
+    bd     = leer_bd()
+    if bd.empty:
+        raise Exception("No hay BD_ACTUALIZACION.")
+    base   = leer_base()
+    if base.empty:
+        raise Exception("No existe BASE.")
+    ac = base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre].copy()
+    if ac.empty:
+        raise Exception(f"La actividad '{nombre}' no existe.")
+    ac   = _validar_pk(ac)
+    ac   = _agregar_cols_comerciales(ac)
+    ac   = ac.drop_duplicates(subset=[PK], keep="last")
+    keep = [c for c in [PK] + COLUMNAS_COMERCIALES if c in ac.columns]
+    nueva = bd.copy()
+    nueva.insert(1, CAMPO_ACTIVIDAD, nombre)
+    nueva = nueva.merge(ac[keep], on=PK, how="left")
+    nueva = _agregar_cols_comerciales(nueva)
+    nueva = _validar_pk(nueva)
+    base  = base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() != nombre].copy()
+    for col in base.columns:
+        if col not in nueva.columns:
+            nueva[col] = None
+    for col in nueva.columns:
+        if col not in base.columns:
+            base[col] = None
+    nueva = nueva[base.columns]
+    base  = pd.concat([base, nueva], ignore_index=True)
+    _guardar_base(base)
+    return base
 
-        st.markdown("**BASE completa**")
-        base = leer_base()
-        if not base.empty:
-            st.download_button(
-                "⬇️ Descargar BASE completa (.parquet)",
-                data=a_parquet(base),
-                file_name="BASE_COMPLETA.parquet",
-                mime="application/octet-stream",
-                key="dl_base"
-            )
-        else:
-            st.info("No hay BASE generada aún.")
+def dataset_actividad(nombre: str) -> pd.DataFrame:
+    base = leer_base()
+    if base.empty:
+        return base
+    return base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre.strip()].copy()
+
+# ─── FILTROS ──────────────────────────────────────────────
+def filtrar_por_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
+    if df.empty or not familias:
+        return df.iloc[0:0].copy()
+    if CAMPO_FAMILIA not in df.columns:
+        return df.iloc[0:0].copy()
+    norm = {_normalizar(x) for x in familias if _normalizar(x)}
+    return df[df[CAMPO_FAMILIA].apply(_normalizar).isin(norm)].copy()
+
+# ─── ACTUALIZAR DESDE CSV (ADC) ───────────────────────────
+def actualizar_desde_csv(
+    nombre: str,
+    archivo: pd.DataFrame,
+    familias_permitidas: Optional[List[str]] = None
+):
+    nombre = nombre.strip()
+    if archivo is None or archivo.empty:
+        raise Exception("El archivo está vacío.")
+
+    base = leer_base()
+    if base.empty:
+        raise Exception("No existe BASE.")
+
+    # Limpiar y validar el archivo subido
+    archivo = _limpiar_columnas(archivo)
+    archivo = _validar_pk(archivo.copy())
+
+    cols = [c for c in COLUMNAS_COMERCIALES if c in archivo.columns]
+    if not cols:
+        raise Exception("El archivo no tiene columnas comerciales (MUNDO_AC, PRECIO_PROMOCIONAL, etc.).")
+
+    mask_ac   = base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre
+    actividad = base.loc[mask_ac].copy()
+    if actividad.empty:
+        raise Exception(f"La actividad '{nombre}' no existe.")
+
+    actividad = _validar_pk(actividad)
+    objetivo  = actividad.copy()
+
+    if familias_permitidas:
+        if CAMPO_FAMILIA not in actividad.columns:
+            raise Exception(f"No existe la columna {CAMPO_FAMILIA}.")
+        norm     = {_normalizar(x) for x in familias_permitidas if _normalizar(x)}
+        objetivo = actividad[actividad[CAMPO_FAMILIA].apply(_normalizar).isin(norm)].copy()
+        if objetivo.empty:
+            raise Exception("No hay artículos de sus familias en esta actividad.")
+
+    pks_ok  = set(objetivo[PK].astype(str).str.strip())
+    archivo = archivo[[PK] + cols].drop_duplicates(subset=[PK], keep="last")
+    archivo = archivo[archivo[PK].astype(str).str.strip().isin(pks_ok)]
+
+    if archivo.empty:
+        raise Exception("El archivo no tiene PK válidos para sus familias.")
+
+    updates  = archivo.set_index(PK)
+    objetivo = objetivo.set_index(PK)
+    comunes  = objetivo.index.intersection(updates.index)
+
+    if len(comunes) == 0:
+        raise Exception("No hay PK coincidentes entre el archivo y la actividad.")
+
+    for col in cols:
+        if col not in objetivo.columns:
+            objetivo[col] = None
+        objetivo.loc[comunes, col] = updates.loc[comunes, col]
+
+    objetivo = objetivo.reset_index()
+
+    if familias_permitidas:
+        restantes = actividad[
+            ~actividad[PK].isin(set(objetivo[PK].astype(str).str.strip()))
+        ].copy()
+        actividad_final = pd.concat([restantes, objetivo], ignore_index=True)
+    else:
+        actividad_final = objetivo.copy()
+
+    base_final = pd.concat([
+        base.loc[~mask_ac].copy(),
+        actividad_final
+    ], ignore_index=True)
+
+    _guardar_base(base_final)
