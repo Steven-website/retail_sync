@@ -9,9 +9,7 @@ from config import (
     COLUMNAS_COMERCIALES,
 )
 
-# ─────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────
+# ─── HELPERS ──────────────────────────────────────────────
 def _leer_parquet(ruta: str) -> pd.DataFrame:
     if not os.path.exists(ruta):
         return pd.DataFrame()
@@ -44,16 +42,19 @@ def _agregar_cols_comerciales(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = None
     return df
 
-def _a_excel(df: pd.DataFrame) -> bytes:
+def a_csv(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df.to_excel(w, index=False, sheet_name="BASE")
+    df.to_csv(buf, index=False, encoding="utf-8-sig")
     buf.seek(0)
     return buf.getvalue()
 
-# ─────────────────────────────────────────
-# BD_ACTUALIZACION
-# ─────────────────────────────────────────
+def a_parquet(df: pd.DataFrame) -> bytes:
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False)
+    buf.seek(0)
+    return buf.getvalue()
+
+# ─── BD_ACTUALIZACION ─────────────────────────────────────
 def leer_bd() -> pd.DataFrame:
     df = _leer_parquet(RUTA_BD)
     if df.empty:
@@ -70,9 +71,7 @@ def subir_bd(file) -> pd.DataFrame:
     df.to_parquet(RUTA_BD, index=False)
     return df
 
-# ─────────────────────────────────────────
-# BASE (archivo que acumula el trabajo)
-# ─────────────────────────────────────────
+# ─── BASE ─────────────────────────────────────────────────
 def leer_base() -> pd.DataFrame:
     base = _leer_parquet(RUTA_BASE)
     if base.empty:
@@ -92,9 +91,7 @@ def _guardar_base(df: pd.DataFrame):
     df[CAMPO_ACTIVIDAD] = df[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
     df.to_parquet(RUTA_BASE, index=False)
 
-# ─────────────────────────────────────────
-# ACTIVIDADES
-# ─────────────────────────────────────────
+# ─── ACTIVIDADES ──────────────────────────────────────────
 def obtener_actividades() -> list:
     base = leer_base()
     if base.empty:
@@ -108,17 +105,15 @@ def crear_actividad(nombre: str) -> pd.DataFrame:
         raise Exception("El nombre no puede estar vacío.")
     bd = leer_bd()
     if bd.empty:
-        raise Exception("No hay BD_ACTUALIZACION cargada. Súbala primero.")
+        raise Exception("No hay BD_ACTUALIZACION cargada. Súbala primero en la tab BD.")
     if nombre in obtener_actividades():
         raise Exception(f"La actividad '{nombre}' ya existe.")
-
     base  = leer_base()
     nueva = bd.copy()
     nueva.insert(1, CAMPO_ACTIVIDAD, nombre)
     nueva = _agregar_cols_comerciales(nueva)
     nueva = _validar_pk(nueva)
     nueva = nueva.drop_duplicates(subset=[PK], keep="last")
-
     if not base.empty:
         for col in base.columns:
             if col not in nueva.columns:
@@ -130,7 +125,6 @@ def crear_actividad(nombre: str) -> pd.DataFrame:
         base  = pd.concat([base, nueva], ignore_index=True)
     else:
         base = nueva
-
     _guardar_base(base)
     return base
 
@@ -151,24 +145,19 @@ def regenerar_actividad(nombre: str) -> pd.DataFrame:
     base   = leer_base()
     if base.empty:
         raise Exception("No existe BASE.")
-
     ac = base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre].copy()
     if ac.empty:
         raise Exception(f"La actividad '{nombre}' no existe.")
-
-    ac = _validar_pk(ac)
-    ac = _agregar_cols_comerciales(ac)
-    ac = ac.drop_duplicates(subset=[PK], keep="last")
-
-    # Conservar solo columnas comerciales trabajadas
+    ac   = _validar_pk(ac)
+    ac   = _agregar_cols_comerciales(ac)
+    ac   = ac.drop_duplicates(subset=[PK], keep="last")
     keep = [c for c in [PK] + COLUMNAS_COMERCIALES if c in ac.columns]
     nueva = bd.copy()
     nueva.insert(1, CAMPO_ACTIVIDAD, nombre)
     nueva = nueva.merge(ac[keep], on=PK, how="left")
     nueva = _agregar_cols_comerciales(nueva)
     nueva = _validar_pk(nueva)
-
-    base = base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() != nombre].copy()
+    base  = base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() != nombre].copy()
     for col in base.columns:
         if col not in nueva.columns:
             nueva[col] = None
@@ -186,9 +175,7 @@ def dataset_actividad(nombre: str) -> pd.DataFrame:
         return base
     return base[base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre.strip()].copy()
 
-# ─────────────────────────────────────────
-# FILTROS
-# ─────────────────────────────────────────
+# ─── FILTROS ──────────────────────────────────────────────
 def filtrar_por_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
     if df.empty or not familias:
         return df.iloc[0:0].copy()
@@ -197,38 +184,30 @@ def filtrar_por_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
     norm = {_normalizar(x) for x in familias if _normalizar(x)}
     return df[df[CAMPO_FAMILIA].apply(_normalizar).isin(norm)].copy()
 
-# ─────────────────────────────────────────
-# ACTUALIZAR DESDE EXCEL (ADC)
-# ─────────────────────────────────────────
-def actualizar_desde_excel(
+# ─── ACTUALIZAR DESDE CSV (ADC) ───────────────────────────
+def actualizar_desde_csv(
     nombre: str,
-    archivo_excel: pd.DataFrame,
+    archivo: pd.DataFrame,
     familias_permitidas: Optional[List[str]] = None
 ):
     nombre = nombre.strip()
-    if archivo_excel is None or archivo_excel.empty:
+    if archivo is None or archivo.empty:
         raise Exception("El archivo está vacío.")
-
     base = leer_base()
     if base.empty:
         raise Exception("No existe BASE.")
-    if PK not in archivo_excel.columns:
+    if PK not in archivo.columns:
         raise Exception(f"El archivo no tiene la columna '{PK}'.")
-
-    archivo_excel = _validar_pk(archivo_excel.copy())
-    cols          = [c for c in COLUMNAS_COMERCIALES if c in archivo_excel.columns]
+    archivo = _validar_pk(archivo.copy())
+    cols    = [c for c in COLUMNAS_COMERCIALES if c in archivo.columns]
     if not cols:
         raise Exception("El archivo no tiene columnas comerciales.")
-
     mask_ac   = base[CAMPO_ACTIVIDAD].astype(str).str.strip() == nombre
     actividad = base.loc[mask_ac].copy()
     if actividad.empty:
         raise Exception(f"La actividad '{nombre}' no existe.")
-
     actividad = _validar_pk(actividad)
     objetivo  = actividad.copy()
-
-    # Filtrar por familias permitidas del ADC
     if familias_permitidas:
         if CAMPO_FAMILIA not in actividad.columns:
             raise Exception(f"No existe la columna {CAMPO_FAMILIA}.")
@@ -236,26 +215,21 @@ def actualizar_desde_excel(
         objetivo = actividad[actividad[CAMPO_FAMILIA].apply(_normalizar).isin(norm)].copy()
         if objetivo.empty:
             raise Exception("No hay artículos de sus familias en esta actividad.")
-
-    pks_ok        = set(objetivo[PK].astype(str).str.strip())
-    archivo_excel = archivo_excel[[PK] + cols].drop_duplicates(subset=[PK], keep="last")
-    archivo_excel = archivo_excel[archivo_excel[PK].astype(str).str.strip().isin(pks_ok)]
-    if archivo_excel.empty:
-        raise Exception("El archivo no contiene PK válidos para sus familias.")
-
-    updates  = archivo_excel.set_index(PK)
+    pks_ok  = set(objetivo[PK].astype(str).str.strip())
+    archivo = archivo[[PK] + cols].drop_duplicates(subset=[PK], keep="last")
+    archivo = archivo[archivo[PK].astype(str).str.strip().isin(pks_ok)]
+    if archivo.empty:
+        raise Exception("El archivo no tiene PK válidos para sus familias.")
+    updates  = archivo.set_index(PK)
     objetivo = objetivo.set_index(PK)
     comunes  = objetivo.index.intersection(updates.index)
     if len(comunes) == 0:
         raise Exception("No hay PK coincidentes entre el archivo y la actividad.")
-
     for col in cols:
         if col not in objetivo.columns:
             objetivo[col] = None
         objetivo.loc[comunes, col] = updates.loc[comunes, col]
-
     objetivo = objetivo.reset_index()
-
     if familias_permitidas:
         restantes = actividad[
             ~actividad[PK].isin(set(objetivo[PK].astype(str).str.strip()))
@@ -263,43 +237,8 @@ def actualizar_desde_excel(
         actividad_final = pd.concat([restantes, objetivo], ignore_index=True)
     else:
         actividad_final = objetivo.copy()
-
     base_final = pd.concat([
         base.loc[~mask_ac].copy(),
         actividad_final
     ], ignore_index=True)
-
     _guardar_base(base_final)
-
-# ─────────────────────────────────────────
-# DESCARGAS
-# ─────────────────────────────────────────
-def descargar_actividad_excel(nombre: str) -> bytes:
-    df = dataset_actividad(nombre)
-    if df.empty:
-        raise Exception(f"La actividad '{nombre}' no tiene datos.")
-    return _a_excel(df)
-
-def descargar_actividad_parquet(nombre: str) -> bytes:
-    df = dataset_actividad(nombre)
-    if df.empty:
-        raise Exception(f"La actividad '{nombre}' no tiene datos.")
-    buf = io.BytesIO()
-    df.to_parquet(buf, index=False)
-    buf.seek(0)
-    return buf.getvalue()
-
-def descargar_base_completa_parquet() -> bytes:
-    base = leer_base()
-    if base.empty:
-        raise Exception("No existe BASE.")
-    buf = io.BytesIO()
-    base.to_parquet(buf, index=False)
-    buf.seek(0)
-    return buf.getvalue()
-
-def descargar_base_completa_excel() -> bytes:
-    base = leer_base()
-    if base.empty:
-        raise Exception("No existe BASE.")
-    return _a_excel(base)
