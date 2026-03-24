@@ -1,11 +1,10 @@
 import streamlit as st
-import pandas as pd
 from io import BytesIO
 from config import CAMPO_FAMILIA
 from data_manager import (
     dataset_actividad,
     obtener_actividades,
-    regenerar_actividad,   # CORRECCIÓN: usar regenerar en lugar de consolidar
+    regenerar_actividad,   # FIX: era consolidar(), que no hacía nada útil
     filtrar_familias
 )
 
@@ -29,7 +28,7 @@ def jefe_adc_view():
 
     # ===============================
     # CONSOLIDAR
-    # CORRECCIÓN: usar regenerar_actividad que sí actualiza datos
+    # FIX: regenerar_actividad actualiza datos desde BD_ACTUALIZACION
     # ===============================
     if st.button("🔄 Consolidar actividad"):
         try:
@@ -55,7 +54,7 @@ def jefe_adc_view():
 
     # ===============================
     # FILTRO VISUAL
-    # CORRECCIÓN: usar constante CAMPO_FAMILIA en lugar de string hardcodeado
+    # FIX: usar constante CAMPO_FAMILIA en lugar de string hardcodeado "FAMILIA"
     # ===============================
     if CAMPO_FAMILIA in df.columns:
         familias_existentes = sorted(df[CAMPO_FAMILIA].dropna().unique())
@@ -69,7 +68,7 @@ def jefe_adc_view():
 
     st.subheader(f"Vista consolidada — {ac}")
     st.caption(f"Registros: {len(df):,}")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
     st.divider()
 
     # ===============================
