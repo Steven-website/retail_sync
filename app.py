@@ -6,47 +6,56 @@ import os
 from datetime import datetime, timedelta
 from openpyxl import Workbook
 
-# =============================
-# CONFIG
-# =============================
 st.set_page_config(page_title="Retail Sync", layout="wide")
 st.title("🛒 Retail Sync")
 
 RUTA_MASTER = "data/master.parquet"
+RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 CARPETA_VERSIONES = "data/versiones"
 ARCHIVO_CONTROL = "data/control_consolidacion.json"
 
-# =============================
-# LIMPIAR VERSIONES >7 DIAS
-# =============================
-def limpiar_versiones():
 
-    if not os.path.exists(CARPETA_VERSIONES):
+# ==========================================
+# ACTUALIZAR MASTER DESDE BD_ACTUALIZACION
+# ==========================================
+def actualizar_master_desde_bd():
+
+    if not os.path.exists(RUTA_BD):
         return
 
-    ahora = datetime.now()
-    limite = ahora - timedelta(days=7)
+    try:
+        master = pd.read_parquet(RUTA_MASTER)
+        bd = pd.read_parquet(RUTA_BD)
+    except:
+        return
 
-    for archivo in os.listdir(CARPETA_VERSIONES):
+    columnas_update = [
+        "FAMILIA","CATEGORIA","SUBCATEGORIA","NO_ARTI","DESCRIPCION","TIPO_CLASIF",
+        "COMPRA_Q_2024","COMPRA_Q_2025","COMPRA_Q_2026",
+        "VTA_YTD_2024","VTA_YTD_2025","VTA_YTD_2026",
+        "VTA_Q_YTD_2024","VTA_Q_YTD_2025","VTA_Q_YTD_2026",
+        "INVENTARIO_Q"
+    ]
 
-        if archivo.startswith("master_"):
+    master = master.merge(
+        bd[["PK_ARTICULO"] + columnas_update],
+        on="PK_ARTICULO",
+        how="left",
+        suffixes=("","_NEW")
+    )
 
-            ruta = os.path.join(CARPETA_VERSIONES, archivo)
+    for col in columnas_update:
+        if col + "_NEW" in master.columns:
+            master[col] = master[col + "_NEW"].combine_first(master[col])
 
-            fecha_txt = archivo.replace("master_", "").replace(".parquet","")
+    master = master.drop(columns=[c for c in master.columns if "_NEW" in c])
 
-            try:
-                fecha_archivo = datetime.strptime(fecha_txt,"%Y%m%d_%H%M%S")
+    master.to_parquet(RUTA_MASTER)
 
-                if fecha_archivo < limite:
-                    os.remove(ruta)
 
-            except:
-                pass
-
-# =============================
+# ==========================================
 # CONSOLIDAR MASTER
-# =============================
+# ==========================================
 def consolidar_master():
 
     master = pd.read_parquet(RUTA_MASTER)
@@ -73,158 +82,21 @@ def consolidar_master():
         os.makedirs(CARPETA_VERSIONES)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
     master.to_parquet(f"{CARPETA_VERSIONES}/master_{timestamp}.parquet")
-
-    limpiar_versiones()
 
     master.to_parquet(RUTA_MASTER)
 
-# =============================
-# CONSOLIDACIÓN AUTOMÁTICA
-# =============================
-def consolidacion_automatica():
 
-    hoy = datetime.now().strftime("%Y-%m-%d")
-
-    if os.path.exists(ARCHIVO_CONTROL):
-
-        with open(ARCHIVO_CONTROL) as f:
-            data = json.load(f)
-
-        if data.get("ultima_consolidacion") == hoy:
-            return
-
-    consolidar_master()
-
-    control = {"ultima_consolidacion": hoy}
-
-    with open(ARCHIVO_CONTROL,"w") as f:
-        json.dump(control,f)
-
-# =============================
-# PANEL ADMIN
-# =============================
-def panel_admin():
-
-    st.markdown("## 🎯 Retail Control Center")
-
-    datos = []
-
-    master = pd.read_parquet(RUTA_MASTER)
-    total = len(master)
-
-    for archivo in os.listdir("data"):
-
-        if archivo.startswith("trabajo_"):
-
-            usuario = archivo.replace("trabajo_", "").replace(".parquet","")
-
-            df = pd.read_parquet(f"data/{archivo}")
-
-            editados = df[
-                (df["ACCION"].notna()) |
-                (df["COMENTARIO"].notna())
-            ].shape[0]
-
-            pendientes = total - editados
-            avance = round(editados / total * 100, 2)
-
-            # semaforo
-            if avance < 30:
-                estado = "🔴"
-            elif avance < 70:
-                estado = "🟡"
-            else:
-                estado = "🟢"
-
-            datos.append({
-                "Usuario": usuario,
-                "Editados": editados,
-                "Pendientes": pendientes,
-                "Avance %": avance,
-                "Estado": estado
-            })
-
-    if len(datos) == 0:
-        st.info("No hay trabajos aún")
-        return
-
-    df_dash = pd.DataFrame(datos)
-
-    # =========================
-    # KPIs
-    # =========================
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "👥 Usuarios trabajando",
-        len(df_dash)
-    )
-
-    col2.metric(
-        "📦 Artículos totales",
-        total
-    )
-
-    avance_global = round(df_dash["Editados"].sum() / (total * len(df_dash)) * 100, 2)
-
-    col3.metric(
-        "🚀 Avance Global %",
-        avance_global
-    )
-
-    st.divider()
-
-    # =========================
-    # RANKING
-    # =========================
-    st.markdown("### 🏆 Ranking avance")
-
-    ranking = df_dash.sort_values("Avance %", ascending=False)
-
-    st.dataframe(ranking, use_container_width=True)
-
-    # =========================
-    # BARRAS
-    # =========================
-    st.markdown("### 📊 Avance por usuario")
-
-    st.bar_chart(
-        ranking.set_index("Usuario")["Avance %"]
-    )
-
-    # =========================
-    # PROGRESO VISUAL
-    # =========================
-    st.markdown("### 📈 Progreso detallado")
-
-    for _, row in ranking.iterrows():
-
-        st.write(f"{row['Estado']} {row['Usuario']}")
-
-        st.progress(
-            min(row["Avance %"] / 100, 1.0)
-        )
-
-    # =========================
-    # PENDIENTES
-    # =========================
-    st.markdown("### ⏳ Pendientes por usuario")
-
-    st.bar_chart(
-        ranking.set_index("Usuario")["Pendientes"]
-    )
-
-# =============================
+# ==========================================
 # LOGIN STATE
-# =============================
+# ==========================================
 if "login" not in st.session_state:
     st.session_state.login = False
 
-# =============================
+
+# ==========================================
 # LOGIN
-# =============================
+# ==========================================
 if not st.session_state.login:
 
     user = st.text_input("Usuario")
@@ -243,12 +115,13 @@ if not st.session_state.login:
 
         st.error("Credenciales incorrectas")
 
-# =============================
+
+# ==========================================
 # SISTEMA
-# =============================
+# ==========================================
 else:
 
-    consolidacion_automatica()
+    actualizar_master_desde_bd()
 
     usuario = st.session_state.user["usuario"]
     rol = st.session_state.user["rol"]
@@ -257,15 +130,32 @@ else:
 
     df = pd.read_parquet(RUTA_MASTER)
 
-    if st.session_state.user["filtro"] != "ALL":
-        df = df[df["SUBCATEGORIA"] == st.session_state.user["filtro"]]
+    # ======================================
+    # SELECTOR ACTIVIDAD COMERCIAL
+    # ======================================
+    actividades = df["ACTIVIDAD_COMERCIAL"].dropna().unique()
 
-    st.dataframe(df)
+    actividad_sel = st.selectbox(
+        "Seleccione Actividad Comercial",
+        actividades
+    )
 
-    # =============================
+    df = df[df["ACTIVIDAD_COMERCIAL"] == actividad_sel]
+
+    # ======================================
+    # FILTRO ADC
+    # ======================================
+    if rol == "ADC":
+        familia_user = st.session_state.user["familia"]
+        df = df[df["FAMILIA"] == familia_user]
+
+    st.dataframe(df, use_container_width=True)
+
+
+    # ======================================
     # DESCARGAR
-    # =============================
-    st.markdown("### 📥 Descargar archivo de trabajo")
+    # ======================================
+    st.markdown("### 📥 Descargar")
 
     buffer = io.BytesIO()
     wb = Workbook()
@@ -287,36 +177,50 @@ else:
         file_name=f"trabajo_{usuario}.xlsx"
     )
 
-    # =============================
-    # SUBIR TRABAJO
-    # =============================
-    st.markdown("### 📤 Subir trabajo")
 
-    archivo = st.file_uploader("Subir Excel", type=["xlsx"])
+    # ======================================
+    # ROLES QUE PUEDEN SUBIR
+    # ======================================
+    if rol in ["ADC","JEFE_ADC"]:
 
-    if archivo is not None:
+        st.warning("Después de subir archivo debe presionar CARGAR CAMBIOS")
 
-        df_user = pd.read_excel(archivo)
+        archivo = st.file_uploader("Subir Excel", type=["xlsx"])
 
-        columnas = ["PK_ARTICULO","ACCION","COMENTARIO"]
+        if archivo is not None:
 
-        if not all(col in df_user.columns for col in columnas):
-            st.error("Archivo incorrecto")
-            st.stop()
+            df_user = pd.read_excel(archivo)
 
-        df_user[columnas].to_parquet(f"data/trabajo_{usuario}.parquet")
+            columnas = ["PK_ARTICULO","ACCION","COMENTARIO"]
 
-        st.success("Trabajo guardado")
+            if not all(col in df_user.columns for col in columnas):
+                st.error("Archivo incorrecto")
+                st.stop()
 
-    # =============================
-    # PANEL + CONSOLIDACIÓN MASTER
-    # =============================
+            df_user[columnas].to_parquet(f"data/trabajo_{usuario}.parquet")
+
+            st.success("Archivo listo")
+
+            if st.button("CARGAR CAMBIOS"):
+                consolidar_master()
+                st.success("Cambios aplicados")
+
+
+    # ======================================
+    # MASTER
+    # ======================================
     if rol == "MASTER":
 
-        panel_admin()
+        st.markdown("### 📊 Analizar")
 
-        st.markdown("### 🔧 Consolidación")
+        if st.button("ANALIZAR"):
+            st.write(df.describe())
 
-        if st.button("Consolidar ahora"):
-            consolidar_master()
-            st.success("Master consolidado manualmente")
+        st.markdown("### 📦 Descargar Base Final")
+
+        if st.button("DESCARGAR PARQUET"):
+            st.download_button(
+                "Descargar",
+                data=open(RUTA_MASTER,"rb"),
+                file_name="MASTER.parquet"
+            )
