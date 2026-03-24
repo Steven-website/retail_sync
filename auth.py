@@ -32,7 +32,7 @@ def login_view():
             if not usuario or not password:
                 st.warning("Complete usuario y contraseña.")
                 return
-            usuarios = cargar_usuarios()
+            usuarios  = cargar_usuarios()
             encontrado = None
             for u in usuarios:
                 if (
