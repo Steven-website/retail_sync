@@ -13,7 +13,7 @@ RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 
 
 # =====================================================
-# CREAR MASTER VACIO BASADO EN BD_ACTUALIZACION
+# CREAR MASTER VACIO
 # =====================================================
 def crear_master_vacio():
 
@@ -25,22 +25,14 @@ def crear_master_vacio():
     bd = pd.read_parquet(RUTA_BD)
 
     columnas = bd.columns.tolist()
-
     columnas.insert(1,"ACTIVIDAD_COMERCIAL")
 
     columnas += [
-        "MUNDO_AC",
-        "PRECIO_PROMOCIONAL",
-        "DESCUENTO",
-        "PORC_AHORRO",
-        "FECHA_INICIO",
-        "FECHA_FIN",
-        "ACCION",
-        "COMENTARIO"
+        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
+        "FECHA_INICIO","FECHA_FIN","ACCION","COMENTARIO"
     ]
 
     df = pd.DataFrame(columns=columnas)
-
     df.to_parquet(RUTA_MASTER,index=False)
 
 
@@ -49,7 +41,7 @@ if not os.path.exists(RUTA_MASTER):
 
 
 # =====================================================
-# ACTUALIZAR MASTER (BD_ACTUALIZACION ES VERDAD)
+# ACTUALIZAR MASTER (UNIVERSO = BD)
 # =====================================================
 def actualizar_master():
 
@@ -66,15 +58,14 @@ def actualizar_master():
         return
 
     columnas_comerciales = [
-        "MUNDO_AC",
-        "PRECIO_PROMOCIONAL",
-        "DESCUENTO",
-        "PORC_AHORRO",
-        "FECHA_INICIO",
-        "FECHA_FIN",
-        "ACCION",
-        "COMENTARIO"
+        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
+        "FECHA_INICIO","FECHA_FIN","ACCION","COMENTARIO"
     ]
+
+    # asegurar columnas comerciales
+    for col in columnas_comerciales:
+        if col not in master.columns:
+            master[col] = None
 
     lista = []
 
@@ -87,8 +78,11 @@ def actualizar_master():
         nuevo = bd.copy()
         nuevo.insert(1,"ACTIVIDAD_COMERCIAL",ac)
 
+        cols_merge = ["PK_Articulos"] + columnas_comerciales
+        cols_merge = [c for c in cols_merge if c in base_ac.columns]
+
         nuevo = nuevo.merge(
-            base_ac[["PK_Articulos"] + columnas_comerciales],
+            base_ac[cols_merge],
             on="PK_Articulos",
             how="left"
         )
@@ -173,14 +167,12 @@ else:
     if master.empty:
 
         if rol != "MASTER":
-            st.warning("No existen Actividades Comerciales")
+            st.warning("No existen Actividades")
             st.stop()
 
-        st.markdown("### Crear Primera Actividad")
+        nueva = st.text_input("Crear Primera Actividad")
 
-        nueva = st.text_input("Nombre Actividad")
-
-        if st.button("CREAR ACTIVIDAD"):
+        if st.button("CREAR"):
 
             bd = pd.read_parquet(RUTA_BD)
 
@@ -200,18 +192,13 @@ else:
             st.success("Actividad creada")
             st.rerun()
 
-    # =================================================
-    # SISTEMA NORMAL
-    # =================================================
     else:
 
         if rol == "MASTER":
 
-            st.markdown("### Crear nueva Actividad")
+            nueva = st.text_input("Nueva Actividad")
 
-            nueva = st.text_input("Nueva AC")
-
-            if st.button("CREAR"):
+            if st.button("CREAR ACTIVIDAD"):
 
                 bd = pd.read_parquet(RUTA_BD)
 
@@ -245,9 +232,7 @@ else:
 
         st.dataframe(df,use_container_width=True)
 
-        # =============================================
         # DESCARGAR EXCEL
-        # =============================================
         buffer = io.BytesIO()
         wb = Workbook()
         ws = wb.active
@@ -268,9 +253,7 @@ else:
             file_name=f"{actividad}_{usuario}.xlsx"
         )
 
-        # =============================================
-        # SUBIR ARCHIVO
-        # =============================================
+        # SUBIR
         if rol in ["ADC","JEFE_ADC"]:
 
             archivo = st.file_uploader("Subir Excel")
@@ -292,12 +275,8 @@ else:
                     consolidar(actividad)
                     st.success("Cambios aplicados")
 
-        # =============================================
         # DESCARGA MASTER
-        # =============================================
         if rol == "MASTER":
-
-            st.markdown("### Descargar Parquet")
 
             col1,col2 = st.columns(2)
 
