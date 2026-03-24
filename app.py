@@ -3,7 +3,6 @@ import pandas as pd
 import json
 import io
 import os
-from datetime import datetime
 from openpyxl import Workbook
 
 st.set_page_config(page_title="Retail Sync", layout="wide")
@@ -13,15 +12,40 @@ RUTA_MASTER = "data/master.parquet"
 RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 
 
-# ==========================================================
-# ACTUALIZAR MASTER DESDE BD_ACTUALIZACION
-# ==========================================================
+# ======================================================
+# CREAR MASTER VACIO SI NO EXISTE
+# ======================================================
+if not os.path.exists(RUTA_MASTER):
+
+    columnas = [
+        "PK_ARTICULO","ACTIVIDAD_COMERCIAL","FAMILIA","CATEGORIA","SUBCATEGORIA",
+        "NO_ARTI","DESCRIPCION","TIPO_CLASIF",
+        "COMPRA_Q_2024","COMPRA_Q_2025","COMPRA_Q_2026",
+        "VTA_YTD_2024","VTA_YTD_2025","VTA_YTD_2026",
+        "VTA_Q_YTD_2024","VTA_Q_YTD_2025","VTA_Q_YTD_2026",
+        "INVENTARIO_Q",
+        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
+        "FECHA_INICIO","FECHA_FIN",
+        "ACCION","COMENTARIO"
+    ]
+
+    df_vacio = pd.DataFrame(columns=columnas)
+    df_vacio.to_parquet(RUTA_MASTER)
+
+
+# ======================================================
+# ACTUALIZAR MASTER DESDE BD
+# ======================================================
 def actualizar_master():
+
+    master = pd.read_parquet(RUTA_MASTER)
+
+    if master.empty:
+        return
 
     if not os.path.exists(RUTA_BD):
         return
 
-    master = pd.read_parquet(RUTA_MASTER)
     bd = pd.read_parquet(RUTA_BD)
 
     columnas_update = [
@@ -47,16 +71,16 @@ def actualizar_master():
     master.to_parquet(RUTA_MASTER)
 
 
-# ==========================================================
-# CONSOLIDAR CAMBIOS USUARIOS
-# ==========================================================
+# ======================================================
+# CONSOLIDAR
+# ======================================================
 def consolidar(actividad):
 
     master = pd.read_parquet(RUTA_MASTER)
 
     for archivo in os.listdir("data"):
 
-        if actividad in archivo and archivo.startswith("trabajo_"):
+        if archivo.startswith("trabajo_") and actividad in archivo:
 
             df_temp = pd.read_parquet(f"data/{archivo}")
 
@@ -75,16 +99,12 @@ def consolidar(actividad):
     master.to_parquet(RUTA_MASTER)
 
 
-# ==========================================================
-# LOGIN STATE
-# ==========================================================
+# ======================================================
+# LOGIN
+# ======================================================
 if "login" not in st.session_state:
     st.session_state.login = False
 
-
-# ==========================================================
-# LOGIN
-# ==========================================================
 if not st.session_state.login:
 
     user = st.text_input("Usuario")
@@ -103,10 +123,6 @@ if not st.session_state.login:
 
         st.error("Credenciales incorrectas")
 
-
-# ==========================================================
-# SISTEMA
-# ==========================================================
 else:
 
     actualizar_master()
@@ -114,32 +130,24 @@ else:
     usuario = st.session_state.user["usuario"]
     rol = st.session_state.user["rol"]
 
-    st.success(f"Bienvenido {usuario}")
-
     master = pd.read_parquet(RUTA_MASTER)
 
-    # ======================================================
-    # CREAR ACTIVIDAD (MASTER)
-    # ======================================================
-    if rol == "MASTER":
+    st.success(f"Bienvenido {usuario}")
 
-        st.markdown("### 🎯 Crear Actividad Comercial")
+    # ==================================================
+    # MASTER VACIO
+    # ==================================================
+    if master.empty:
+
+        if rol != "MASTER":
+            st.warning("No existen Actividades Comerciales creadas")
+            st.stop()
+
+        st.markdown("### 🎯 Crear Primera Actividad")
 
         nueva_ac = st.text_input("Nombre Actividad")
 
         if st.button("CREAR ACTIVIDAD"):
-
-            if nueva_ac == "":
-                st.warning("Debe escribir nombre")
-                st.stop()
-
-            if nueva_ac in master["ACTIVIDAD_COMERCIAL"].unique():
-                st.error("Actividad ya existe")
-                st.stop()
-
-            if not os.path.exists(RUTA_BD):
-                st.error("No existe BD_ACTUALIZACION")
-                st.stop()
 
             bd = pd.read_parquet(RUTA_BD)
 
@@ -153,103 +161,94 @@ else:
             bd["ACCION"] = None
             bd["COMENTARIO"] = None
 
-            master = pd.concat([master, bd], ignore_index=True)
-
-            master.to_parquet(RUTA_MASTER)
+            bd.to_parquet(RUTA_MASTER)
 
             st.success("Actividad creada")
             st.rerun()
 
-    # ======================================================
-    # SELECTOR ACTIVIDAD
-    # ======================================================
-    actividades = master["ACTIVIDAD_COMERCIAL"].dropna().unique()
+    # ==================================================
+    # SISTEMA NORMAL
+    # ==================================================
+    else:
 
-    actividad = st.selectbox(
-        "Seleccione Actividad Comercial",
-        actividades
-    )
+        if rol == "MASTER":
 
-    df = master[master["ACTIVIDAD_COMERCIAL"] == actividad]
+            st.markdown("### 🎯 Crear Actividad")
 
-    # filtro ADC
-    if rol == "ADC":
-        fam = st.session_state.user["familia"]
-        df = df[df["FAMILIA"] == fam]
+            nueva_ac = st.text_input("Nueva Actividad")
 
-    st.dataframe(df, use_container_width=True)
+            if st.button("CREAR"):
 
-    # ======================================================
-    # DESCARGAR
-    # ======================================================
-    st.markdown("### 📥 Descargar")
+                if nueva_ac in master["ACTIVIDAD_COMERCIAL"].unique():
+                    st.error("Actividad ya existe")
+                    st.stop()
 
-    buffer = io.BytesIO()
-    wb = Workbook()
-    ws = wb.active
+                bd = pd.read_parquet(RUTA_BD)
 
-    for c,col in enumerate(df.columns,1):
-        ws.cell(row=1,column=c,value=col)
+                bd["ACTIVIDAD_COMERCIAL"] = nueva_ac
+                bd["MUNDO_AC"] = None
+                bd["PRECIO_PROMOCIONAL"] = None
+                bd["DESCUENTO"] = None
+                bd["PORC_AHORRO"] = None
+                bd["FECHA_INICIO"] = None
+                bd["FECHA_FIN"] = None
+                bd["ACCION"] = None
+                bd["COMENTARIO"] = None
 
-    for r,row in enumerate(df.itertuples(index=False),2):
-        for c,val in enumerate(row,1):
-            ws.cell(row=r,column=c,value=val)
+                master = pd.concat([master, bd], ignore_index=True)
+                master.to_parquet(RUTA_MASTER)
 
-    wb.save(buffer)
-    buffer.seek(0)
+                st.success("Actividad creada")
+                st.rerun()
 
-    st.download_button(
-        "Descargar Excel",
-        data=buffer,
-        file_name=f"{actividad}_{usuario}.xlsx"
-    )
+        actividades = master["ACTIVIDAD_COMERCIAL"].unique()
 
-    # ======================================================
-    # SUBIR SOLO ADC Y JEFE
-    # ======================================================
-    if rol in ["ADC","JEFE_ADC"]:
+        actividad = st.selectbox("Seleccione Actividad", actividades)
 
-        st.warning("Debe presionar CARGAR CAMBIOS después de subir archivo")
+        df = master[master["ACTIVIDAD_COMERCIAL"] == actividad]
 
-        archivo = st.file_uploader("Subir Excel", type=["xlsx"])
+        if rol == "ADC":
+            fam = st.session_state.user["familia"]
+            df = df[df["FAMILIA"] == fam]
 
-        if archivo is not None:
+        st.dataframe(df, use_container_width=True)
 
-            df_user = pd.read_excel(archivo)
+        buffer = io.BytesIO()
+        wb = Workbook()
+        ws = wb.active
 
-            columnas = ["PK_ARTICULO","ACCION","COMENTARIO"]
+        for c,col in enumerate(df.columns,1):
+            ws.cell(row=1,column=c,value=col)
 
-            if not all(c in df_user.columns for c in columnas):
-                st.error("Archivo incorrecto")
-                st.stop()
+        for r,row in enumerate(df.itertuples(index=False),2):
+            for c,val in enumerate(row,1):
+                ws.cell(row=r,column=c,value=val)
 
-            df_user["ACTIVIDAD_COMERCIAL"] = actividad
+        wb.save(buffer)
+        buffer.seek(0)
 
-            nombre = f"data/trabajo_{usuario}_{actividad}.parquet"
+        st.download_button(
+            "Descargar Excel",
+            data=buffer,
+            file_name=f"{actividad}_{usuario}.xlsx"
+        )
 
-            df_user[["PK_ARTICULO","ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]].to_parquet(nombre)
+        if rol in ["ADC","JEFE_ADC"]:
 
-            st.success("Archivo listo")
+            archivo = st.file_uploader("Subir Excel", type=["xlsx"])
 
-            if st.button("CARGAR CAMBIOS"):
-                consolidar(actividad)
-                st.success("Cambios aplicados")
+            if archivo:
 
-    # ======================================================
-    # MASTER ANALIZA
-    # ======================================================
-    if rol == "MASTER":
+                df_user = pd.read_excel(archivo)
 
-        st.markdown("### 📊 Analizar")
+                df_user["ACTIVIDAD_COMERCIAL"] = actividad
 
-        if st.button("ANALIZAR"):
-            st.write(df.describe())
+                df_user[
+                    ["PK_ARTICULO","ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]
+                ].to_parquet(
+                    f"data/trabajo_{usuario}_{actividad}.parquet"
+                )
 
-        st.markdown("### 📦 Descargar MASTER")
-
-        if st.button("DESCARGAR PARQUET"):
-            st.download_button(
-                "Descargar",
-                data=open(RUTA_MASTER,"rb"),
-                file_name="MASTER.parquet"
-            )
+                if st.button("CARGAR CAMBIOS"):
+                    consolidar(actividad)
+                    st.success("Cambios aplicados")
