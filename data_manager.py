@@ -1,191 +1,294 @@
-import pandas as pd
+import io
 import os
-from config import *
+import pandas as pd
+from config import (
+    RUTA_BD,
+    RUTA_MASTER,
+    PK,
+    CAMPO_ACTIVIDAD,
+    CAMPO_FAMILIA,
+    COLUMNAS_COMERCIALES,
+)
 
 
 # =====================================================
-# CARGAR BD ACTUALIZACION
+# HELPERS
 # =====================================================
-def cargar_bd_actualizacion(file):
+def _asegurar_columnas_comerciales(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for col in COLUMNAS_COMERCIALES:
+        if col not in df.columns:
+            df[col] = None
+    return df
 
-    df = pd.read_parquet(file)
 
-    if "PK_Articulos" not in df.columns:
-        raise Exception("No existe PK_Articulos")
+def _leer_parquet_seguro(ruta: str) -> pd.DataFrame:
+    if not os.path.exists(ruta):
+        return pd.DataFrame()
+    return pd.read_parquet(ruta)
 
-    df.to_parquet(RUTA_BD_ACT)
+
+# =====================================================
+# BD_ACTUALIZACION
+# =====================================================
+def leer_bd_actualizacion() -> pd.DataFrame:
+    df = _leer_parquet_seguro(RUTA_BD)
+
+    if df.empty:
+        return df
+
+    if PK not in df.columns:
+        raise Exception(f"No existe la columna {PK} en BD_ACTUALIZACION")
 
     return df
 
 
-# =====================================================
-# LEER BD ACT
-# =====================================================
-def leer_bd_act():
+def guardar_bd_actualizacion_desde_upload(file) -> pd.DataFrame:
+    df = pd.read_parquet(file)
 
-    if not os.path.exists(RUTA_BD_ACT):
-        return pd.DataFrame()
+    if PK not in df.columns:
+        raise Exception(f"El parquet cargado no tiene la columna {PK}")
 
-    return pd.read_parquet(RUTA_BD_ACT)
-
-
-# =====================================================
-# LEER MASTER
-# =====================================================
-def leer_master():
-
-    if not os.path.exists(RUTA_MASTER):
-        return pd.DataFrame()
-
-    return pd.read_parquet(RUTA_MASTER)
+    df.to_parquet(RUTA_BD, index=False)
+    return df
 
 
 # =====================================================
-# GUARDAR MASTER
+# MASTER
 # =====================================================
-def guardar_master(df):
-    df.to_parquet(RUTA_MASTER)
+def leer_master() -> pd.DataFrame:
+    master = _leer_parquet_seguro(RUTA_MASTER)
+
+    if master.empty:
+        return master
+
+    master = _asegurar_columnas_comerciales(master)
+
+    if PK not in master.columns:
+        raise Exception(f"MASTER no tiene la columna {PK}")
+
+    if CAMPO_ACTIVIDAD not in master.columns:
+        master[CAMPO_ACTIVIDAD] = ""
+
+    return master
+
+
+def guardar_master(df: pd.DataFrame) -> None:
+    df = _asegurar_columnas_comerciales(df)
+    df.to_parquet(RUTA_MASTER, index=False)
 
 
 # =====================================================
-# CREAR ACTIVIDAD
+# ACTIVIDADES
 # =====================================================
-def crear_actividad(nombre):
-
-    bd = leer_bd_act()
+def obtener_actividades() -> list:
     master = leer_master()
 
+    if master.empty or CAMPO_ACTIVIDAD not in master.columns:
+        return []
+
+    actividades = (
+        master[CAMPO_ACTIVIDAD]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .unique()
+        .tolist()
+    )
+
+    return sorted([x for x in actividades if x != ""])
+
+
+def crear_actividad(nombre: str) -> pd.DataFrame:
+    nombre = str(nombre).strip()
+
+    if not nombre:
+        raise Exception("Debe escribir un nombre de actividad")
+
+    bd = leer_bd_actualizacion()
     if bd.empty:
-        raise Exception("No existe BD_ACTUALIZACION")
+        raise Exception("No existe BD_ACTUALIZACION para crear la actividad")
 
-    base = bd.copy()
+    master = leer_master()
 
-    base["ACTIVIDAD"] = nombre
+    actividades = obtener_actividades()
+    if nombre in actividades:
+        raise Exception("La actividad ya existe")
 
-    for col in COLUMNAS_COMERCIALES:
-        base[col] = ""
+    nueva = bd.copy()
+    nueva.insert(1, CAMPO_ACTIVIDAD, nombre)
+    nueva = _asegurar_columnas_comerciales(nueva)
 
-    master = pd.concat([master, base], ignore_index=True)
+    if not master.empty:
+        for col in master.columns:
+            if col not in nueva.columns:
+                nueva[col] = None
+
+        for col in nueva.columns:
+            if col not in master.columns:
+                master[col] = None
+
+        nueva = nueva[master.columns]
+        master = pd.concat([master, nueva], ignore_index=True)
+    else:
+        master = nueva
 
     guardar_master(master)
+    return master
+
+
+def eliminar_actividad(nombre: str) -> pd.DataFrame:
+    master = leer_master()
+    if master.empty:
+        raise Exception("No existe MASTER")
+
+    mask = master[CAMPO_ACTIVIDAD].astype(str).str.strip() != str(nombre).strip()
+    master = master.loc[mask].copy()
+
+    guardar_master(master)
+    return master
+
+
+def dataset_actividad(nombre: str) -> pd.DataFrame:
+    master = leer_master()
+    if master.empty:
+        return master
+
+    return master[
+        master[CAMPO_ACTIVIDAD].astype(str).str.strip() == str(nombre).strip()
+    ].copy()
 
 
 # =====================================================
 # REGENERAR BASES
 # =====================================================
-def regenerar_bases(actividad):
+def regenerar_actividad(nombre: str) -> pd.DataFrame:
+    bd = leer_bd_actualizacion()
+    if bd.empty:
+        raise Exception("No existe BD_ACTUALIZACION")
 
-    bd = leer_bd_act()
     master = leer_master()
+    if master.empty:
+        raise Exception("No existe MASTER")
 
-    base_ac = master[master["ACTIVIDAD"] == actividad]
+    base_ac = dataset_actividad(nombre)
+    if base_ac.empty:
+        raise Exception("La actividad no existe o no tiene registros")
 
-    # universo nuevo
+    base_ac = _asegurar_columnas_comerciales(base_ac)
+
+    keep_cols = [PK] + COLUMNAS_COMERCIALES
+    keep_cols = [c for c in keep_cols if c in base_ac.columns]
+
     nuevo = bd.copy()
-    nuevo["ACTIVIDAD"] = actividad
+    nuevo.insert(1, CAMPO_ACTIVIDAD, nombre)
+    nuevo = nuevo.merge(base_ac[keep_cols], on=PK, how="left")
+    nuevo = _asegurar_columnas_comerciales(nuevo)
 
-    # mantener comerciales
-    cols_keep = ["PK_Articulos"] + COLUMNAS_COMERCIALES
+    master = master[
+        master[CAMPO_ACTIVIDAD].astype(str).str.strip() != str(nombre).strip()
+    ].copy()
 
-    merge = base_ac[cols_keep]
+    # Alinear columnas
+    for col in master.columns:
+        if col not in nuevo.columns:
+            nuevo[col] = None
 
-    nuevo = nuevo.merge(
-        merge,
-        on="PK_Articulos",
-        how="left"
-    )
+    for col in nuevo.columns:
+        if col not in master.columns:
+            master[col] = None
 
-    nuevo[COLUMNAS_COMERCIALES] = nuevo[COLUMNAS_COMERCIALES].fillna("")
-
-    master = master[master["ACTIVIDAD"] != actividad]
-
+    nuevo = nuevo[master.columns]
     master = pd.concat([master, nuevo], ignore_index=True)
 
     guardar_master(master)
+    return master
 
 
-# =====================================================
-# OBTENER ACTIVIDADES
-# =====================================================
-def obtener_actividades():
-
+def regenerar_todas_las_actividades() -> pd.DataFrame:
+    actividades = obtener_actividades()
     master = leer_master()
 
-    if master.empty:
-        return []
+    if not actividades:
+        raise Exception("No hay actividades para regenerar")
 
-    return sorted(master["ACTIVIDAD"].unique())
+    for ac in actividades:
+        master = regenerar_actividad(ac)
 
-
-# =====================================================
-# DATASET ACTIVIDAD
-# =====================================================
-def dataset_actividad(actividad):
-
-    master = leer_master()
-
-    return master[master["ACTIVIDAD"] == actividad]
+    return master
 
 
 # =====================================================
-# FILTRAR FAMILIAS
+# FILTROS / CONSOLIDADOS
 # =====================================================
-def filtrar_familias(df, familias):
+def filtrar_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
+    if df.empty or not familias:
+        return df.copy()
 
-    if not familias:
-        return df
+    if CAMPO_FAMILIA not in df.columns:
+        return df.copy()
 
-    return df[df["FAMILIA"].isin(familias)]
+    familias_limpias = [str(x).strip() for x in familias if str(x).strip()]
+    if not familias_limpias:
+        return df.copy()
+
+    return df[df[CAMPO_FAMILIA].astype(str).str.strip().isin(familias_limpias)].copy()
 
 
-# =====================================================
-# MERGE EXCEL ADC
-# =====================================================
-def actualizar_desde_excel(file, actividad):
-
-    master = leer_master()
-
-    base = pd.read_excel(file)
-
-    if "PK_Articulos" not in base.columns:
-        raise Exception("Excel sin PK")
-
-    base_ac = master[master["ACTIVIDAD"] == actividad]
-
-    # SOLO columnas comerciales
-    cols = ["PK_Articulos"] + COLUMNAS_COMERCIALES
-
-    base = base[cols]
-
-    base_ac = base_ac.drop(columns=COLUMNAS_COMERCIALES)
-
-    base_ac = base_ac.merge(
-        base,
-        on="PK_Articulos",
-        how="left"
-    )
-
-    base_ac[COLUMNAS_COMERCIALES] = base_ac[COLUMNAS_COMERCIALES].fillna("")
-
-    master = master[master["ACTIVIDAD"] != actividad]
-
-    master = pd.concat([master, base_ac], ignore_index=True)
-
-    guardar_master(master)
+def consolidar(nombre: str) -> pd.DataFrame:
+    # En este diseño, el MASTER ya contiene el consolidado vivo de la actividad
+    return dataset_actividad(nombre)
 
 
 # =====================================================
-# CONSOLIDAR ACTIVIDAD
+# ANALISIS
 # =====================================================
-def consolidar(actividad):
+def analizar_actividad(nombre: str) -> dict:
+    df = dataset_actividad(nombre)
 
-    # en este diseño el master ya es consolidado
-    return dataset_actividad(actividad)
+    total = len(df)
+
+    if total == 0:
+        return {
+            "filas": 0,
+            "familias": 0,
+            "trabajadas": 0,
+            "pendientes": 0,
+            "avance_pct": 0.0,
+        }
+
+    cols_existentes = [c for c in COLUMNAS_COMERCIALES if c in df.columns]
+    if cols_existentes:
+        trabajadas = int(df[cols_existentes].notna().any(axis=1).sum())
+    else:
+        trabajadas = 0
+
+    pendientes = total - trabajadas
+    familias = int(df[CAMPO_FAMILIA].nunique()) if CAMPO_FAMILIA in df.columns else 0
+    avance_pct = round((trabajadas / total) * 100, 2) if total > 0 else 0.0
+
+    return {
+        "filas": total,
+        "familias": familias,
+        "trabajadas": trabajadas,
+        "pendientes": pendientes,
+        "avance_pct": avance_pct,
+    }
 
 
 # =====================================================
-# EXPORTAR EXCEL RAPIDO
+# EXPORTS
 # =====================================================
-def exportar_excel(df):
+def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="BASE")
+    output.seek(0)
+    return output.getvalue()
 
-    return df.to_excel(index=False)
+
+def df_to_parquet_bytes(df: pd.DataFrame) -> bytes:
+    output = io.BytesIO()
+    df.to_parquet(output, index=False)
+    output.seek(0)
+    return output.getvalue()
