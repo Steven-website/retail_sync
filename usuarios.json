@@ -3,30 +3,30 @@
     "usuario":"Steven",
     "password":"123",
     "rol":"MASTER",
-    "familia":"ALL"
+    "FAMILIA":"ALL"
   },
   {
     "usuario":"jefe1",
     "password":"123",
     "rol":"JEFE_ADC",
-    "familia":"ALL"
+    "FAMILIA":"ALL"
   },
   {
     "usuario":"adc1",
     "password":"123",
     "rol":"ADC",
-    "familia":"ESCOLAR"
+    "FAMILIA":"ELECTRODOMESTICOS"
   },
   {
     "usuario":"precios",
     "password":"123",
     "rol":"PRECIOS",
-    "familia":"ALL"
+    "FAMILIA":"ALL"
   },
   {
     "usuario":"marketing",
     "password":"123",
     "rol":"MARKETING",
-    "familia":"ALL"
+    "FAMILIA":"ALL"
   }
 ]
