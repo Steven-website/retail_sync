@@ -9,21 +9,23 @@ from data_manager import (
 )
 
 def _leer_csv(archivo) -> pd.DataFrame:
-    """Lee CSV manejando comas dentro de campos y distintas codificaciones."""
     for encoding in ["utf-8-sig", "utf-8", "latin-1"]:
         try:
             archivo.seek(0)
-            return pd.read_csv(
+            df = pd.read_csv(
                 archivo,
                 encoding=encoding,
                 sep=",",
                 quotechar='"',
-                quoting=0,        # QUOTE_MINIMAL — respeta comillas dobles
+                quoting=0,
                 on_bad_lines="skip"
             )
+            # Limpiar nombres de columnas — quitar espacios y BOM
+            df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
+            return df
         except Exception:
             continue
-    raise Exception("No se pudo leer el CSV. Verifique que el archivo no esté corrupto.")
+    raise Exception("No se pudo leer el CSV.")
 
 def adc_view():
     st.header("🧑‍💻 Panel ADC")
@@ -38,7 +40,6 @@ def adc_view():
         st.warning("No hay actividades disponibles.")
         return
 
-    # Paso 1: Seleccionar actividad
     ac = st.selectbox("Seleccione actividad", actividades)
 
     df = dataset_actividad(ac)
@@ -55,7 +56,6 @@ def adc_view():
     st.dataframe(df_filtrado, use_container_width=True, height=400)
     st.divider()
 
-    # Paso 2: Descargar CSV para trabajar offline
     st.download_button(
         "⬇️ Descargar CSV para trabajar",
         data=a_csv(df_filtrado),
@@ -65,7 +65,6 @@ def adc_view():
 
     st.divider()
 
-    # Paso 3: Subir CSV trabajado y actualizar
     st.subheader("📤 Subir archivo trabajado")
     st.caption("Solo se actualizan sus familias. El resto permanece intacto.")
 
@@ -81,7 +80,7 @@ def adc_view():
     if archivo:
         try:
             preview = _leer_csv(archivo)
-            st.caption(f"Vista previa: {len(preview):,} filas")
+            st.caption(f"Vista previa: {len(preview):,} filas — Columnas: {list(preview.columns[:5])}")
             st.dataframe(preview.head(5), use_container_width=True)
         except Exception as e:
             st.error(f"❌ No se pudo leer el archivo: {e}")
