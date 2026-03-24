@@ -4,17 +4,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Rutas
 RUTA_BD    = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
 RUTA_BASE  = os.path.join(DATA_DIR, "BASE.parquet")
 RUTA_USERS = os.path.join(BASE_DIR, "usuarios.json")
 
-# Columnas clave
-PK              = "PK_Articulos"
-CAMPO_ACTIVIDAD = "ACTIVIDAD_COMERCIAL"
-CAMPO_FAMILIA   = "FAMILIA"
+PK               = "PK_Articulos"
+CAMPO_ACTIVIDAD  = "ACTIVIDAD_COMERCIAL"
+CAMPO_FAMILIA    = "FAMILIA"
 
-# Columnas que llena el ADC
 COLUMNAS_COMERCIALES = [
     "MUNDO_AC",
     "PRECIO_PROMOCIONAL",
@@ -26,13 +23,11 @@ COLUMNAS_COMERCIALES = [
     "COMENTARIO",
 ]
 
-# Roles
-ROL_MASTER      = "MASTER"
-ROL_ADC         = "ADC"
+ROL_MASTER       = "MASTER"
+ROL_ADC          = "ADC"
 ROL_VISUALIZADOR = "VISUALIZADOR"
 ROLES_DISPONIBLES = [ROL_MASTER, ROL_ADC, ROL_VISUALIZADOR]
 
-# Familias
 FAMILIAS_DISPONIBLES = [
     "No_Registrado", "NAVIDAD", "ELECTRODOMESTICOS", "JUGUETERIA",
     "AUTOMOTRIZ", "FIESTA", "DEPORTE", "FERRETERIA", "CUIDADO PERSONAL",
@@ -42,7 +37,6 @@ FAMILIAS_DISPONIBLES = [
     "Línea reserv. serv.", "SERVICIOS", "GENERAL",
 ]
 
-# Sesión
 SESSION_DEFAULTS = {
     "login":    False,
     "usuario":  None,
