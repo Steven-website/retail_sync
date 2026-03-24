@@ -139,7 +139,7 @@ def master_view():
 
             df = dataset_actividad(ac)
             st.caption(f"Registros: {len(df):,}")
-            st.dataframe(df.head(2000), use_container_width=True)
+            st.dataframe(df.head(2000), width="stretch")
 
     # =====================================================
     # TAB CONSOLIDACION
@@ -159,7 +159,7 @@ def master_view():
                 st.warning("La actividad no tiene datos.")
             else:
                 st.caption(f"Registros: {len(df):,}")
-                st.dataframe(df.head(2000), use_container_width=True)
+                st.dataframe(df.head(2000), width="stretch")
 
                 st.download_button(
                     "⬇ Descargar Excel actividad",
