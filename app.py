@@ -12,25 +12,35 @@ RUTA_MASTER = "data/master.parquet"
 RUTA_BD = "data/BD_ACTUALIZACION.parquet"
 
 
-# =========================================
-# CREAR MASTER VACIO
-# =========================================
+# =====================================================
+# CREAR MASTER VACIO BASADO EN BD_ACTUALIZACION
+# =====================================================
 def crear_master_vacio():
 
-    columnas = [
-        "PK_ARTICULO","ACTIVIDAD_COMERCIAL",
-        "FAMILIA","CATEGORIA","SUBCATEGORIA",
-        "NO_ARTI","DESCRIPCION","TIPO_CLASIF",
-        "COMPRA_Q_2024","COMPRA_Q_2025","COMPRA_Q_2026",
-        "VTA_YTD_2024","VTA_YTD_2025","VTA_YTD_2026",
-        "VTA_Q_YTD_2024","VTA_Q_YTD_2025","VTA_Q_YTD_2026",
-        "INVENTARIO_Q",
-        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
-        "FECHA_INICIO","FECHA_FIN",
-        "ACCION","COMENTARIO"
+    if not os.path.exists(RUTA_BD):
+        df = pd.DataFrame(columns=["PK_Articulos","ACTIVIDAD_COMERCIAL"])
+        df.to_parquet(RUTA_MASTER,index=False)
+        return
+
+    bd = pd.read_parquet(RUTA_BD)
+
+    columnas = bd.columns.tolist()
+
+    columnas.insert(1,"ACTIVIDAD_COMERCIAL")
+
+    columnas += [
+        "MUNDO_AC",
+        "PRECIO_PROMOCIONAL",
+        "DESCUENTO",
+        "PORC_AHORRO",
+        "FECHA_INICIO",
+        "FECHA_FIN",
+        "ACCION",
+        "COMENTARIO"
     ]
 
     df = pd.DataFrame(columns=columnas)
+
     df.to_parquet(RUTA_MASTER,index=False)
 
 
@@ -38,9 +48,9 @@ if not os.path.exists(RUTA_MASTER):
     crear_master_vacio()
 
 
-# =========================================
-# ACTUALIZAR MASTER DESDE BD_ACTUALIZACION
-# =========================================
+# =====================================================
+# ACTUALIZAR MASTER (BD_ACTUALIZACION ES VERDAD)
+# =====================================================
 def actualizar_master():
 
     if not os.path.exists(RUTA_MASTER):
@@ -56,8 +66,14 @@ def actualizar_master():
         return
 
     columnas_comerciales = [
-        "MUNDO_AC","PRECIO_PROMOCIONAL","DESCUENTO","PORC_AHORRO",
-        "FECHA_INICIO","FECHA_FIN","ACCION","COMENTARIO"
+        "MUNDO_AC",
+        "PRECIO_PROMOCIONAL",
+        "DESCUENTO",
+        "PORC_AHORRO",
+        "FECHA_INICIO",
+        "FECHA_FIN",
+        "ACCION",
+        "COMENTARIO"
     ]
 
     lista = []
@@ -69,11 +85,11 @@ def actualizar_master():
         base_ac = master[master["ACTIVIDAD_COMERCIAL"] == ac]
 
         nuevo = bd.copy()
-        nuevo["ACTIVIDAD_COMERCIAL"] = ac
+        nuevo.insert(1,"ACTIVIDAD_COMERCIAL",ac)
 
         nuevo = nuevo.merge(
-            base_ac[["PK_ARTICULO"] + columnas_comerciales],
-            on="PK_ARTICULO",
+            base_ac[["PK_Articulos"] + columnas_comerciales],
+            on="PK_Articulos",
             how="left"
         )
 
@@ -84,9 +100,9 @@ def actualizar_master():
     master_nuevo.to_parquet(RUTA_MASTER,index=False)
 
 
-# =========================================
+# =====================================================
 # CONSOLIDAR CAMBIOS
-# =========================================
+# =====================================================
 def consolidar(actividad):
 
     master = pd.read_parquet(RUTA_MASTER)
@@ -100,7 +116,7 @@ def consolidar(actividad):
 
             master = master.merge(
                 temp,
-                on=["PK_ARTICULO","ACTIVIDAD_COMERCIAL"],
+                on=["PK_Articulos","ACTIVIDAD_COMERCIAL"],
                 how="left",
                 suffixes=("","_NEW")
             )
@@ -116,9 +132,9 @@ def consolidar(actividad):
     master.to_parquet(RUTA_MASTER,index=False)
 
 
-# =========================================
+# =====================================================
 # LOGIN
-# =========================================
+# =====================================================
 if "login" not in st.session_state:
     st.session_state.login = False
 
@@ -151,9 +167,9 @@ else:
 
     st.success(f"Bienvenido {usuario}")
 
-    # =====================================
+    # =================================================
     # MASTER VACIO
-    # =====================================
+    # =================================================
     if master.empty:
 
         if rol != "MASTER":
@@ -168,7 +184,8 @@ else:
 
             bd = pd.read_parquet(RUTA_BD)
 
-            bd["ACTIVIDAD_COMERCIAL"] = nueva
+            bd.insert(1,"ACTIVIDAD_COMERCIAL",nueva)
+
             bd["MUNDO_AC"]=None
             bd["PRECIO_PROMOCIONAL"]=None
             bd["DESCUENTO"]=None
@@ -183,6 +200,9 @@ else:
             st.success("Actividad creada")
             st.rerun()
 
+    # =================================================
+    # SISTEMA NORMAL
+    # =================================================
     else:
 
         if rol == "MASTER":
@@ -195,7 +215,8 @@ else:
 
                 bd = pd.read_parquet(RUTA_BD)
 
-                bd["ACTIVIDAD_COMERCIAL"] = nueva
+                bd.insert(1,"ACTIVIDAD_COMERCIAL",nueva)
+
                 bd["MUNDO_AC"]=None
                 bd["PRECIO_PROMOCIONAL"]=None
                 bd["DESCUENTO"]=None
@@ -205,7 +226,7 @@ else:
                 bd["ACCION"]=None
                 bd["COMENTARIO"]=None
 
-                master = pd.concat([master,bd])
+                master = pd.concat([master,bd],ignore_index=True)
                 master.to_parquet(RUTA_MASTER,index=False)
 
                 st.success("Actividad creada")
@@ -224,9 +245,9 @@ else:
 
         st.dataframe(df,use_container_width=True)
 
-        # =====================================
+        # =============================================
         # DESCARGAR EXCEL
-        # =====================================
+        # =============================================
         buffer = io.BytesIO()
         wb = Workbook()
         ws = wb.active
@@ -247,9 +268,9 @@ else:
             file_name=f"{actividad}_{usuario}.xlsx"
         )
 
-        # =====================================
-        # SUBIR
-        # =====================================
+        # =============================================
+        # SUBIR ARCHIVO
+        # =============================================
         if rol in ["ADC","JEFE_ADC"]:
 
             archivo = st.file_uploader("Subir Excel")
@@ -261,7 +282,9 @@ else:
 
                 ruta = f"data/trabajo_{usuario}_{actividad}.parquet"
 
-                df_user[["PK_ARTICULO","ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]].to_parquet(ruta,index=False)
+                df_user[["PK_Articulos","ACTIVIDAD_COMERCIAL","ACCION","COMENTARIO"]].to_parquet(
+                    ruta,index=False
+                )
 
                 st.success("Archivo cargado")
 
@@ -269,9 +292,9 @@ else:
                     consolidar(actividad)
                     st.success("Cambios aplicados")
 
-        # =====================================
+        # =============================================
         # DESCARGA MASTER
-        # =====================================
+        # =============================================
         if rol == "MASTER":
 
             st.markdown("### Descargar Parquet")
@@ -280,11 +303,7 @@ else:
 
             with col1:
                 with open(RUTA_MASTER,"rb") as f:
-                    st.download_button(
-                        "MASTER TOTAL",
-                        f,
-                        file_name="MASTER.parquet"
-                    )
+                    st.download_button("MASTER TOTAL",f,file_name="MASTER.parquet")
 
             with col2:
                 df_ac = master[master["ACTIVIDAD_COMERCIAL"] == actividad]
@@ -293,8 +312,4 @@ else:
                 df_ac.to_parquet(buffer_parquet,index=False)
                 buffer_parquet.seek(0)
 
-                st.download_button(
-                    "Solo Actividad",
-                    buffer_parquet,
-                    file_name=f"{actividad}.parquet"
-                )
+                st.download_button("Solo Actividad",buffer_parquet,file_name=f"{actividad}.parquet")
