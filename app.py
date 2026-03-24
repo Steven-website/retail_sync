@@ -29,8 +29,7 @@ if not os.path.exists(RUTA_MASTER):
         "ACCION","COMENTARIO"
     ]
 
-    df_vacio = pd.DataFrame(columns=columnas)
-    df_vacio.to_parquet(RUTA_MASTER)
+    pd.DataFrame(columns=columnas).to_parquet(RUTA_MASTER)
 
 
 # ======================================================
@@ -64,7 +63,8 @@ def actualizar_master():
     )
 
     for col in columnas_update:
-        master[col] = master[col+"_NEW"].combine_first(master[col])
+        if col+"_NEW" in master.columns:
+            master[col] = master[col+"_NEW"].combine_first(master[col])
 
     master = master.drop(columns=[c for c in master.columns if "_NEW" in c])
 
@@ -152,6 +152,7 @@ else:
             bd = pd.read_parquet(RUTA_BD)
 
             bd["ACTIVIDAD_COMERCIAL"] = nueva_ac
+
             bd["MUNDO_AC"] = None
             bd["PRECIO_PROMOCIONAL"] = None
             bd["DESCUENTO"] = None
@@ -160,6 +161,14 @@ else:
             bd["FECHA_FIN"] = None
             bd["ACCION"] = None
             bd["COMENTARIO"] = None
+
+            estructura = pd.read_parquet(RUTA_MASTER).columns
+
+            for col in estructura:
+                if col not in bd.columns:
+                    bd[col] = None
+
+            bd = bd[estructura]
 
             bd.to_parquet(RUTA_MASTER)
 
@@ -186,6 +195,7 @@ else:
                 bd = pd.read_parquet(RUTA_BD)
 
                 bd["ACTIVIDAD_COMERCIAL"] = nueva_ac
+
                 bd["MUNDO_AC"] = None
                 bd["PRECIO_PROMOCIONAL"] = None
                 bd["DESCUENTO"] = None
@@ -196,6 +206,7 @@ else:
                 bd["COMENTARIO"] = None
 
                 master = pd.concat([master, bd], ignore_index=True)
+
                 master.to_parquet(RUTA_MASTER)
 
                 st.success("Actividad creada")
