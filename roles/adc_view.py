@@ -99,7 +99,7 @@ def adc_view():
         if st.button("Actualizar información"):
 
             try:
-                actualizar_desde_excel(file, ac)
+                actualizar_desde_excel(file, ac, familias_usuario)
                 st.success("Actualización aplicada correctamente")
                 st.rerun()
 

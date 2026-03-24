@@ -251,6 +251,76 @@ def filtrar_familias(df: pd.DataFrame, familias: list) -> pd.DataFrame:
     return df[familias_df.isin(familias_norm)].copy()
 
 
+def actualizar_desde_excel(file, nombre: str, familias_permitidas: list | None = None) -> None:
+    master = leer_master()
+    if master.empty:
+        raise Exception("No existe MASTER")
+
+    base_excel = pd.read_excel(file)
+    if PK not in base_excel.columns:
+        raise Exception(f"Excel sin columna {PK}")
+
+    cols_excel = [c for c in COLUMNAS_COMERCIALES if c in base_excel.columns]
+    if not cols_excel:
+        raise Exception("El Excel no contiene columnas comerciales para actualizar")
+
+    actividad_mask = master[CAMPO_ACTIVIDAD].astype(str).str.strip() == str(nombre).strip()
+    actividad_df = master.loc[actividad_mask].copy()
+    if actividad_df.empty:
+        raise Exception("La actividad no existe o no tiene registros")
+
+    objetivo_df = actividad_df.copy()
+    if familias_permitidas is not None:
+        if CAMPO_FAMILIA not in actividad_df.columns:
+            raise Exception(f"No existe columna {CAMPO_FAMILIA} en la actividad")
+
+        familias_norm = {
+            _normalizar_texto(x)
+            for x in familias_permitidas
+            if _normalizar_texto(x)
+        }
+        objetivo_mask = actividad_df[CAMPO_FAMILIA].apply(_normalizar_texto).isin(familias_norm)
+        objetivo_df = actividad_df.loc[objetivo_mask].copy()
+
+        if objetivo_df.empty:
+            raise Exception("No hay filas habilitadas para sus familias en esta actividad")
+
+    # Solo actualiza PK válidos del subconjunto permitido
+    pks_objetivo = set(objetivo_df[PK].astype(str))
+    base_excel = base_excel[[PK] + cols_excel].copy()
+    base_excel = base_excel.drop_duplicates(subset=[PK], keep="last")
+    base_excel = base_excel[base_excel[PK].astype(str).isin(pks_objetivo)]
+
+    if base_excel.empty:
+        raise Exception("El archivo no contiene PK válidos para actualizar en su alcance")
+
+    updates = base_excel.set_index(PK)
+    objetivo_df = objetivo_df.set_index(PK)
+
+    pks_comunes = objetivo_df.index.intersection(updates.index)
+    if len(pks_comunes) == 0:
+        raise Exception("No hay coincidencias de PK entre la actividad y el archivo cargado")
+
+    for col in cols_excel:
+        if col not in objetivo_df.columns:
+            objetivo_df[col] = None
+        objetivo_df.loc[pks_comunes, col] = updates.loc[pks_comunes, col]
+
+    objetivo_actualizado = objetivo_df.reset_index()
+
+    if familias_permitidas is not None:
+        restantes_actividad = actividad_df[
+            ~actividad_df[PK].astype(str).isin(set(objetivo_actualizado[PK].astype(str)))
+        ].copy()
+        actividad_final = pd.concat([restantes_actividad, objetivo_actualizado], ignore_index=True)
+    else:
+        actividad_final = objetivo_actualizado
+
+    master_sin_actividad = master.loc[~actividad_mask].copy()
+    master_final = pd.concat([master_sin_actividad, actividad_final], ignore_index=True)
+    guardar_master(master_final)
+
+
 def consolidar(nombre: str) -> pd.DataFrame:
     # En este diseño, el MASTER ya contiene el consolidado vivo de la actividad
     return dataset_actividad(nombre)
