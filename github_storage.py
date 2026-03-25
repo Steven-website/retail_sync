@@ -63,3 +63,22 @@ def push_parquet(df, path: str, mensaje: str = "update data"):
 def push_json(texto: str, path: str, mensaje: str = "update data"):
     """Sube texto JSON a GitHub."""
     push_bytes(texto.encode("utf-8"), path, mensaje)
+
+
+def delete_file(path: str, mensaje: str = "delete file"):
+    """Elimina un archivo del repositorio en GitHub."""
+    try:
+        sha = _get_sha(path)
+        if not sha:
+            return  # No existe, nada que hacer
+        url = f"https://api.github.com/repos/{_repo()}/contents/{path}"
+        payload = {
+            "message": mensaje,
+            "sha": sha,
+            "branch": _branch(),
+        }
+        r = requests.delete(url, headers=_headers(), json=payload)
+        if r.status_code not in (200, 204):
+            st.warning(f"⚠️ No se pudo eliminar '{path}' de GitHub: {r.json().get('message', r.status_code)}")
+    except Exception as e:
+        st.warning(f"⚠️ Error al eliminar de GitHub: {e}")

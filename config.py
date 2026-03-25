@@ -4,9 +4,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-RUTA_BD    = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
-RUTA_BASE  = os.path.join(DATA_DIR, "BASE.parquet")
-RUTA_USERS = os.path.join(BASE_DIR, "usuarios.json")
+RUTA_BD          = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
+RUTA_BASE        = os.path.join(DATA_DIR, "BASE.parquet")  # legado
+RUTA_ACTIVIDADES = os.path.join(DATA_DIR, "actividades")
+RUTA_USERS       = os.path.join(BASE_DIR, "usuarios.json")
+os.makedirs(RUTA_ACTIVIDADES, exist_ok=True)
 
 PK               = "PK_Articulos"
 CAMPO_ACTIVIDAD  = "ACTIVIDAD_COMERCIAL"
