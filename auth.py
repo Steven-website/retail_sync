@@ -1,6 +1,7 @@
 import json
 import streamlit as st
 from config import SESSION_DEFAULTS, RUTA_USERS, ROL_MASTER
+from github_storage import push_json
 
 def init_session():
     for k, v in SESSION_DEFAULTS.items():
@@ -18,8 +19,10 @@ def cargar_usuarios() -> list:
         st.stop()
 
 def guardar_usuarios(usuarios: list):
+    texto = json.dumps(usuarios, ensure_ascii=False, indent=2)
     with open(RUTA_USERS, "w", encoding="utf-8") as f:
-        json.dump(usuarios, f, ensure_ascii=False, indent=2)
+        f.write(texto)
+    push_json(texto, "usuarios.json", "update usuarios")
 
 def login_view():
     col1, col2, col3 = st.columns([1, 2, 1])
