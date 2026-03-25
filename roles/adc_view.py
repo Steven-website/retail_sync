@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import io
 from data_manager import (
     obtener_actividades,
     dataset_actividad,
@@ -8,6 +7,8 @@ from data_manager import (
     actualizar_desde_csv,
     a_csv,
 )
+from queue_manager import handle_queue, submit_op
+
 
 def _leer_csv(archivo) -> pd.DataFrame:
     """Lee CSV detectando separador automáticamente y limpiando nombres de columnas."""
@@ -23,15 +24,14 @@ def _leer_csv(archivo) -> pd.DataFrame:
                     quoting=0,
                     on_bad_lines="skip"
                 )
-                # Si solo tiene 1 columna, el separador no era el correcto
                 if len(df.columns) <= 1:
                     continue
-                # Limpiar nombres de columnas
                 df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
                 return df
             except Exception:
                 continue
     raise Exception("No se pudo leer el CSV. Verifique el archivo.")
+
 
 def adc_view():
     st.header("🧑‍💻 Panel ADC")
@@ -41,6 +41,32 @@ def adc_view():
         st.error("⚠️ No tiene familias asignadas. Contacte al administrador.")
         return
 
+    # ── MENSAJES DE ESTADO DE COLA ────────────────────────
+    if st.session_state.pop("_q_cancelled", False):
+        st.warning(
+            "⚠️ Operación cancelada. "
+            "Si el sistema sigue ocupado, espere unos segundos y vuélvala a intentar."
+        )
+
+    # ── PROCESAR COLA ─────────────────────────────────────
+    try:
+        completed, _ = handle_queue({
+            "actualizar_csv": lambda ac, datos, familias: actualizar_desde_csv(ac, datos, familias),
+        })
+    except Exception as e:
+        st.error(f"❌ {e}")
+        st.info("Si el problema persiste, recargue la página e intente de nuevo.")
+        completed = False
+
+    if completed:
+        st.success("✔ BASE actualizada correctamente.")
+        if "upload_key" not in st.session_state:
+            st.session_state.upload_key = 0
+        st.session_state.upload_key += 1
+        st.rerun()
+        return
+
+    # ── VISTA NORMAL ──────────────────────────────────────
     actividades = obtener_actividades()
     if not actividades:
         st.warning("No hay actividades disponibles.")
@@ -62,7 +88,6 @@ def adc_view():
     st.dataframe(df_filtrado, use_container_width=True, height=400)
     st.divider()
 
-    # Descargar CSV
     st.download_button(
         "⬇️ Descargar CSV para trabajar",
         data=a_csv(df_filtrado),
@@ -94,11 +119,13 @@ def adc_view():
 
         if st.button("✅ Actualizar BASE"):
             try:
-                with st.spinner("Aplicando cambios..."):
-                    datos = _leer_csv(archivo)
-                    actualizar_desde_csv(ac, datos, familias)
-                st.success("✔ BASE actualizada correctamente.")
-                st.session_state.upload_key += 1
+                datos = _leer_csv(archivo)
+                fam_label = ', '.join(familias[:3]) + ('...' if len(familias) > 3 else '')
+                submit_op(
+                    "actualizar_csv",
+                    f"Actualizar {ac} — familias: {fam_label}",
+                    {"ac": ac, "datos": datos, "familias": familias},
+                )
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ {e}")

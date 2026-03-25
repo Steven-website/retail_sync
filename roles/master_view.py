@@ -1,3 +1,4 @@
+import io
 import json
 import streamlit as st
 from auth import cargar_usuarios, guardar_usuarios
@@ -8,10 +9,40 @@ from data_manager import (
     crear_actividad, eliminar_actividad, regenerar_actividad,
     dataset_actividad, a_parquet,
 )
+from queue_manager import handle_queue, submit_op
+
+
+def _bd_subir_bytes(data_bytes):
+    return subir_bd(io.BytesIO(data_bytes))
+
 
 def master_view():
     st.header("👑 Panel MASTER")
 
+    # ── MENSAJES DE ESTADO DE COLA ────────────────────────
+    if st.session_state.pop("_q_cancelled", False):
+        st.warning(
+            "⚠️ Operación cancelada. "
+            "Si el sistema sigue ocupado, espere unos segundos y vuélvala a intentar."
+        )
+
+    # ── PROCESAR COLA ─────────────────────────────────────
+    try:
+        completed, _ = handle_queue({
+            "bd_subir":            lambda data_bytes: _bd_subir_bytes(data_bytes),
+            "actividad_crear":     lambda nombre: crear_actividad(nombre),
+            "actividad_eliminar":  lambda nombre: eliminar_actividad(nombre),
+            "actividad_regenerar": lambda nombre: regenerar_actividad(nombre),
+        })
+    except Exception as e:
+        st.error(f"❌ {e}")
+        st.info("Si el problema persiste, recargue la página e intente de nuevo.")
+        completed = False
+
+    if completed:
+        st.success("✔ Operación completada.")
+
+    # ── TABS ──────────────────────────────────────────────
     tab_bd, tab_actividades, tab_usuarios, tab_descargas = st.tabs([
         "📂 BD", "⚙️ Actividades", "👥 Usuarios", "⬇️ Descargas"
     ])
@@ -28,12 +59,8 @@ def master_view():
         archivo = st.file_uploader("Subir BD (.parquet)", type=["parquet"])
         if archivo:
             if st.button("💾 Guardar BD"):
-                try:
-                    df = subir_bd(archivo)
-                    st.success(f"✔ BD guardada — {len(df):,} filas")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")
+                submit_op("bd_subir", "Guardar BD_ACTUALIZACION", {"data_bytes": archivo.read()})
+                st.rerun()
 
     # ── TAB ACTIVIDADES ───────────────────────────────────
     with tab_actividades:
@@ -43,12 +70,8 @@ def master_view():
             if not nombre.strip():
                 st.warning("Escriba un nombre.")
             else:
-                try:
-                    crear_actividad(nombre)
-                    st.success(f"✔ Actividad '{nombre}' creada.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")
+                submit_op("actividad_crear", f"Crear actividad '{nombre}'", {"nombre": nombre})
+                st.rerun()
 
         st.divider()
         actividades = obtener_actividades()
@@ -59,24 +82,16 @@ def master_view():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("🔄 Regenerar"):
-                    try:
-                        regenerar_actividad(ac)
-                        st.success(f"✔ '{ac}' regenerada. Artículos nuevos agregados, trabajo previo conservado.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ {e}")
+                    submit_op("actividad_regenerar", f"Regenerar actividad '{ac}'", {"nombre": ac})
+                    st.rerun()
             with col2:
-                confirmar = st.checkbox(f"Confirmar eliminación de '{ac}'")
+                confirmar = st.checkbox(f"Confirmar eliminación de '{ac}'", key=f"chk_elim_{ac}")
                 if st.button("🗑️ Eliminar"):
                     if not confirmar:
                         st.warning("⚠️ Marque la casilla para confirmar. Esta acción no se puede deshacer.")
                     else:
-                        try:
-                            eliminar_actividad(ac)
-                            st.success(f"✔ '{ac}' eliminada.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ {e}")
+                        submit_op("actividad_eliminar", f"Eliminar actividad '{ac}'", {"nombre": ac})
+                        st.rerun()
 
     # ── TAB USUARIOS ──────────────────────────────────────
     with tab_usuarios:
