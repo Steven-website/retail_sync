@@ -66,10 +66,10 @@ def master_view():
                     except Exception as e:
                         st.error(f"❌ {e}")
             with col2:
-                confirmar = st.checkbox("Confirmar eliminación")
+                confirmar = st.checkbox(f"Confirmar eliminación de '{ac}'")
                 if st.button("🗑️ Eliminar"):
                     if not confirmar:
-                        st.warning("Marque la casilla de confirmación primero.")
+                        st.warning("⚠️ Marque la casilla para confirmar. Esta acción no se puede deshacer.")
                     else:
                         try:
                             eliminar_actividad(ac)
@@ -86,8 +86,13 @@ def master_view():
         if not usuarios:
             st.info("No hay usuarios.")
         else:
+            from collections import Counter
+            conteo = Counter(u["rol"] for u in usuarios)
+            cols = st.columns(len(conteo))
+            for col, (rol, cantidad) in zip(cols, conteo.items()):
+                col.metric(rol, cantidad)
             for i, u in enumerate(usuarios):
-                with st.expander(f"👤 {u['usuario']} — {u['rol']}"):
+                with st.expander(f"👤 {u['usuario']} — {u['rol']} — 🔑 {'•' * len(u.get('password', ''))}"):
                     col1, col2 = st.columns(2)
                     with col1:
                         nuevo_pwd = st.text_input(
@@ -111,13 +116,16 @@ def master_view():
                     c1, c2 = st.columns(2)
                     with c1:
                         if st.button("💾 Guardar", key=f"save_{i}"):
-                            usuarios[i]["rol"]      = nuevo_rol
-                            usuarios[i]["familias"] = nuevas_fam
-                            if nuevo_pwd.strip():
-                                usuarios[i]["password"] = nuevo_pwd.strip()
-                            guardar_usuarios(usuarios)
-                            st.success("✔ Cambios guardados.")
-                            st.rerun()
+                            if nuevo_pwd.strip() and len(nuevo_pwd.strip()) < 6:
+                                st.warning("⚠️ La contraseña debe tener al menos 6 caracteres.")
+                            else:
+                                usuarios[i]["rol"]      = nuevo_rol
+                                usuarios[i]["familias"] = nuevas_fam
+                                if nuevo_pwd.strip():
+                                    usuarios[i]["password"] = nuevo_pwd.strip()
+                                guardar_usuarios(usuarios)
+                                st.success("✔ Cambios guardados.")
+                                st.rerun()
                     with c2:
                         if u["usuario"] != "admin":
                             if st.button("🗑️ Eliminar usuario", key=f"del_{i}"):
@@ -136,6 +144,8 @@ def master_view():
         if st.button("➕ Crear usuario"):
             if not nu.strip() or not np_.strip():
                 st.warning("Complete usuario y contraseña.")
+            elif len(np_.strip()) < 6:
+                st.warning("⚠️ La contraseña debe tener al menos 6 caracteres.")
             else:
                 usuarios = cargar_usuarios()
                 if any(u["usuario"].lower() == nu.strip().lower() for u in usuarios):
@@ -161,6 +171,22 @@ def master_view():
             mime="application/json",
             key="dl_usuarios"
         )
+
+        st.divider()
+        st.subheader("Restaurar usuarios desde archivo")
+        archivo_usuarios = st.file_uploader("Subir usuarios.json", type=["json"], key="up_usuarios")
+        if archivo_usuarios:
+            if st.button("📂 Cargar usuarios"):
+                try:
+                    datos = json.loads(archivo_usuarios.read().decode("utf-8"))
+                    if not isinstance(datos, list):
+                        st.error("❌ El archivo no tiene el formato correcto.")
+                    else:
+                        guardar_usuarios(datos)
+                        st.success(f"✔ Usuarios restaurados — {len(datos)} usuarios cargados.")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error al leer el archivo: {e}")
 
     # ── TAB DESCARGAS ─────────────────────────────────────
     with tab_descargas:

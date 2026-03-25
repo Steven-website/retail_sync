@@ -13,6 +13,7 @@ if not st.session_state.login:
     st.stop()
 
 st.title("🛒 Retail Sync")
+st.caption(f"Bienvenido, **{st.session_state.usuario}** · Rol: {st.session_state.rol}")
 st.divider()
 sidebar_usuario()
 
