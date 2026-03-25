@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 from auth import cargar_usuarios, guardar_usuarios
 from config import ROLES_DISPONIBLES, FAMILIAS_DISPONIBLES
@@ -149,6 +150,17 @@ def master_view():
                     guardar_usuarios(usuarios)
                     st.success(f"✔ Usuario '{nu}' creado.")
                     st.rerun()
+
+        st.divider()
+        st.subheader("Respaldo de usuarios")
+        usuarios_actuales = cargar_usuarios()
+        st.download_button(
+            label="⬇️ Descargar usuarios.json",
+            data=json.dumps(usuarios_actuales, ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name="usuarios.json",
+            mime="application/json",
+            key="dl_usuarios"
+        )
 
     # ── TAB DESCARGAS ─────────────────────────────────────
     with tab_descargas:
