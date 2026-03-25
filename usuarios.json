@@ -4,5 +4,16 @@
     "password": "admin123",
     "rol": "MASTER",
     "familias": []
+  },
+  {
+    "usuario": "Daniel",
+    "password": "Daniel123",
+    "rol": "ADC",
+    "familias": [
+      "AUTOMOTRIZ",
+      "DEPORTE",
+      "FERRETERIA",
+      "ELECTRODOMESTICOS"
+    ]
   }
 ]
