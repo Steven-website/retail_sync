@@ -15,5 +15,13 @@
       "FERRETERIA",
       "ELECTRODOMESTICOS"
     ]
+  },
+  {
+    "usuario": "Gustavo",
+    "password": "Gustavo123",
+    "rol": "ADC",
+    "familias": [
+      "JUGUETERIA"
+    ]
   }
 ]
