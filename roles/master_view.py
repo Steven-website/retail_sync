@@ -190,31 +190,6 @@ def master_view():
                     st.success(f"✔ Usuario '{nu}' creado.")
                     st.rerun()
 
-        st.divider()
-        st.subheader("Respaldo de usuarios")
-        st.download_button(
-            label="⬇️ Descargar usuarios.json",
-            data=json.dumps(cargar_usuarios(), ensure_ascii=False, indent=2).encode("utf-8"),
-            file_name="usuarios.json", mime="application/json", key="dl_usuarios"
-        )
-        st.divider()
-        st.subheader("Restaurar usuarios desde archivo")
-        archivo_usr = st.file_uploader("Subir usuarios.json", type=["json"], key="up_usuarios")
-        if archivo_usr:
-            if st.button("📂 Cargar usuarios"):
-                try:
-                    datos = json.loads(archivo_usr.read().decode("utf-8"))
-                    if not isinstance(datos, list):
-                        st.error("❌ El archivo no tiene el formato correcto.")
-                    else:
-                        guardar_usuarios(datos)
-                        hist.registrar(st.session_state.get("usuario", "?"),
-                                       "Restauró usuarios", f"{len(datos)} usuarios")
-                        st.success(f"✔ Usuarios restaurados — {len(datos)} usuarios cargados.")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error al leer el archivo: {e}")
-
     # ── TAB DESCARGAS ──────────────────────────────────
     with tab_dl:
         st.subheader("Descargas en parquet")
