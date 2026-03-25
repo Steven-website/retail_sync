@@ -8,22 +8,16 @@ from data_manager import (
     a_csv,
 )
 from queue_manager import handle_queue, submit_op
+import historial as hist
 
 
 def _leer_csv(archivo) -> pd.DataFrame:
-    """Lee CSV detectando separador automáticamente y limpiando nombres de columnas."""
     for encoding in ["utf-8-sig", "utf-8", "latin-1"]:
         for sep in [",", ";", "\t"]:
             try:
                 archivo.seek(0)
-                df = pd.read_csv(
-                    archivo,
-                    encoding=encoding,
-                    sep=sep,
-                    quotechar='"',
-                    quoting=0,
-                    on_bad_lines="skip"
-                )
+                df = pd.read_csv(archivo, encoding=encoding, sep=sep,
+                                 quotechar='"', quoting=0, on_bad_lines="skip")
                 if len(df.columns) <= 1:
                     continue
                 df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
@@ -31,6 +25,16 @@ def _leer_csv(archivo) -> pd.DataFrame:
             except Exception:
                 continue
     raise Exception("No se pudo leer el CSV. Verifique el archivo.")
+
+
+def _h_actualizar(ac, datos, familias):
+    actualizar_desde_csv(ac, datos, familias)
+    fam_label = ', '.join(familias[:3]) + ('...' if len(familias) > 3 else '')
+    hist.registrar(
+        st.session_state.get("usuario", "?"),
+        "Actualizó datos",
+        f"{ac} — familias: {fam_label}"
+    )
 
 
 def adc_view():
@@ -41,17 +45,17 @@ def adc_view():
         st.error("⚠️ No tiene familias asignadas. Contacte al administrador.")
         return
 
-    # ── MENSAJES DE ESTADO DE COLA ────────────────────────
+    # ── MENSAJES DE COLA ─────────────────────────────────
     if st.session_state.pop("_q_cancelled", False):
         st.warning(
             "⚠️ Operación cancelada. "
             "Si el sistema sigue ocupado, espere unos segundos y vuélvala a intentar."
         )
 
-    # ── PROCESAR COLA ─────────────────────────────────────
+    # ── COLA ──────────────────────────────────────────
     try:
         completed, _ = handle_queue({
-            "actualizar_csv": lambda ac, datos, familias: actualizar_desde_csv(ac, datos, familias),
+            "actualizar_csv": _h_actualizar,
         })
     except Exception as e:
         st.error(f"❌ {e}")
@@ -66,14 +70,13 @@ def adc_view():
         st.rerun()
         return
 
-    # ── VISTA NORMAL ──────────────────────────────────────
+    # ── VISTA ────────────────────────────────────────────
     actividades = obtener_actividades()
     if not actividades:
         st.warning("No hay actividades disponibles.")
         return
 
     ac = st.selectbox("Seleccione actividad", actividades)
-
     df = dataset_actividad(ac)
     if df.empty:
         st.warning("La actividad no tiene datos.")
@@ -90,9 +93,7 @@ def adc_view():
 
     st.download_button(
         "⬇️ Descargar CSV para trabajar",
-        data=a_csv(df_filtrado),
-        file_name=f"{ac}_ADC.csv",
-        mime="text/csv"
+        data=a_csv(df_filtrado), file_name=f"{ac}_ADC.csv", mime="text/csv"
     )
 
     st.divider()
@@ -103,8 +104,7 @@ def adc_view():
         st.session_state.upload_key = 0
 
     archivo = st.file_uploader(
-        "Seleccione CSV trabajado",
-        type=["csv"],
+        "Seleccione CSV trabajado", type=["csv"],
         key=f"uploader_{st.session_state.upload_key}"
     )
 

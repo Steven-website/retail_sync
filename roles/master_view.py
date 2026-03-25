@@ -1,5 +1,6 @@
 import io
 import json
+import pandas as pd
 import streamlit as st
 from auth import cargar_usuarios, guardar_usuarios
 from config import ROLES_DISPONIBLES, FAMILIAS_DISPONIBLES
@@ -10,29 +11,52 @@ from data_manager import (
     dataset_actividad, a_parquet,
 )
 from queue_manager import handle_queue, submit_op
+import historial as hist
 
 
 def _bd_subir_bytes(data_bytes):
     return subir_bd(io.BytesIO(data_bytes))
 
 
+# ── HANDLERS CON HISTORIAL ────────────────────────────────
+
+def _h_bd_subir(data_bytes):
+    df = _bd_subir_bytes(data_bytes)
+    hist.registrar(st.session_state.get("usuario", "?"), "Subió BD", f"{len(df):,} filas")
+    return df
+
+def _h_crear(nombre):
+    result = crear_actividad(nombre)
+    hist.registrar(st.session_state.get("usuario", "?"), "Creó actividad", nombre)
+    return result
+
+def _h_eliminar(nombre):
+    eliminar_actividad(nombre)
+    hist.registrar(st.session_state.get("usuario", "?"), "Eliminó actividad", nombre)
+
+def _h_regenerar(nombre):
+    result = regenerar_actividad(nombre)
+    hist.registrar(st.session_state.get("usuario", "?"), "Regeneró actividad", nombre)
+    return result
+
+
 def master_view():
     st.header("👑 Panel MASTER")
 
-    # ── MENSAJES DE ESTADO DE COLA ────────────────────────
+    # ── MENSAJES DE COLA ───────────────────────────────────
     if st.session_state.pop("_q_cancelled", False):
         st.warning(
             "⚠️ Operación cancelada. "
             "Si el sistema sigue ocupado, espere unos segundos y vuélvala a intentar."
         )
 
-    # ── PROCESAR COLA ─────────────────────────────────────
+    # ── COLA ───────────────────────────────────────────
     try:
         completed, _ = handle_queue({
-            "bd_subir":            lambda data_bytes: _bd_subir_bytes(data_bytes),
-            "actividad_crear":     lambda nombre: crear_actividad(nombre),
-            "actividad_eliminar":  lambda nombre: eliminar_actividad(nombre),
-            "actividad_regenerar": lambda nombre: regenerar_actividad(nombre),
+            "bd_subir":            _h_bd_subir,
+            "actividad_crear":     _h_crear,
+            "actividad_eliminar":  _h_eliminar,
+            "actividad_regenerar": _h_regenerar,
         })
     except Exception as e:
         st.error(f"❌ {e}")
@@ -42,12 +66,12 @@ def master_view():
     if completed:
         st.success("✔ Operación completada.")
 
-    # ── TABS ──────────────────────────────────────────────
-    tab_bd, tab_actividades, tab_usuarios, tab_descargas = st.tabs([
-        "📂 BD", "⚙️ Actividades", "👥 Usuarios", "⬇️ Descargas"
+    # ── TABS ─────────────────────────────────────────────
+    tab_bd, tab_act, tab_usr, tab_dl, tab_hist = st.tabs([
+        "📂 BD", "⚙️ Actividades", "👥 Usuarios", "⬇️ Descargas", "📋 Historial"
     ])
 
-    # ── TAB BD ────────────────────────────────────────────
+    # ── TAB BD ──────────────────────────────────────────
     with tab_bd:
         st.subheader("BD_ACTUALIZACION")
         bd = leer_bd()
@@ -55,15 +79,14 @@ def master_view():
             st.success(f"✔ BD cargada — {len(bd):,} filas · {len(bd.columns)} columnas")
         else:
             st.warning("⚠️ No hay BD cargada. Suba un archivo .parquet para comenzar.")
-
         archivo = st.file_uploader("Subir BD (.parquet)", type=["parquet"])
         if archivo:
             if st.button("💾 Guardar BD"):
                 submit_op("bd_subir", "Guardar BD_ACTUALIZACION", {"data_bytes": archivo.read()})
                 st.rerun()
 
-    # ── TAB ACTIVIDADES ───────────────────────────────────
-    with tab_actividades:
+    # ── TAB ACTIVIDADES ─────────────────────────────────
+    with tab_act:
         st.subheader("Crear actividad comercial")
         nombre = st.text_input("Nombre de la actividad")
         if st.button("➕ Crear"):
@@ -93,10 +116,9 @@ def master_view():
                         submit_op("actividad_eliminar", f"Eliminar actividad '{ac}'", {"nombre": ac})
                         st.rerun()
 
-    # ── TAB USUARIOS ──────────────────────────────────────
-    with tab_usuarios:
+    # ── TAB USUARIOS ───────────────────────────────────
+    with tab_usr:
         usuarios = cargar_usuarios()
-
         st.subheader("Usuarios existentes")
         if not usuarios:
             st.info("No hay usuarios.")
@@ -110,24 +132,15 @@ def master_view():
                 with st.expander(f"👤 {u['usuario']} — {u['rol']} — 🔑 {'•' * len(u.get('password', ''))}"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        nuevo_pwd = st.text_input(
-                            "Nueva contraseña",
-                            key=f"pwd_{i}",
-                            placeholder="Dejar vacío para no cambiar"
-                        )
-                        nuevo_rol = st.selectbox(
-                            "Rol",
-                            ROLES_DISPONIBLES,
+                        nuevo_pwd = st.text_input("Nueva contraseña", key=f"pwd_{i}",
+                                                   placeholder="Dejar vacío para no cambiar")
+                        nuevo_rol = st.selectbox("Rol", ROLES_DISPONIBLES,
                             index=ROLES_DISPONIBLES.index(u["rol"]) if u["rol"] in ROLES_DISPONIBLES else 0,
-                            key=f"rol_{i}"
-                        )
+                            key=f"rol_{i}")
                     with col2:
-                        nuevas_fam = st.multiselect(
-                            "Familias",
-                            FAMILIAS_DISPONIBLES,
+                        nuevas_fam = st.multiselect("Familias", FAMILIAS_DISPONIBLES,
                             default=[f for f in u.get("familias", []) if f in FAMILIAS_DISPONIBLES],
-                            key=f"fam_{i}"
-                        )
+                            key=f"fam_{i}")
                     c1, c2 = st.columns(2)
                     with c1:
                         if st.button("💾 Guardar", key=f"save_{i}"):
@@ -139,6 +152,8 @@ def master_view():
                                 if nuevo_pwd.strip():
                                     usuarios[i]["password"] = nuevo_pwd.strip()
                                 guardar_usuarios(usuarios)
+                                hist.registrar(st.session_state.get("usuario", "?"),
+                                               "Editó usuario", u["usuario"])
                                 st.success("✔ Cambios guardados.")
                                 st.rerun()
                     with c2:
@@ -146,6 +161,8 @@ def master_view():
                             if st.button("🗑️ Eliminar usuario", key=f"del_{i}"):
                                 usuarios.pop(i)
                                 guardar_usuarios(usuarios)
+                                hist.registrar(st.session_state.get("usuario", "?"),
+                                               "Eliminó usuario", u["usuario"])
                                 st.success("✔ Usuario eliminado.")
                                 st.rerun()
 
@@ -155,7 +172,6 @@ def master_view():
         np_ = st.text_input("Contraseña", type="password", key="np")
         nr  = st.selectbox("Rol", ROLES_DISPONIBLES, key="nr")
         nf  = st.multiselect("Familias", FAMILIAS_DISPONIBLES, key="nf")
-
         if st.button("➕ Crear usuario"):
             if not nu.strip() or not np_.strip():
                 st.warning("Complete usuario y contraseña.")
@@ -166,48 +182,43 @@ def master_view():
                 if any(u["usuario"].lower() == nu.strip().lower() for u in usuarios):
                     st.error("Ya existe un usuario con ese nombre.")
                 else:
-                    usuarios.append({
-                        "usuario":  nu.strip(),
-                        "password": np_.strip(),
-                        "rol":      nr,
-                        "familias": nf,
-                    })
+                    usuarios.append({"usuario": nu.strip(), "password": np_.strip(),
+                                     "rol": nr, "familias": nf})
                     guardar_usuarios(usuarios)
+                    hist.registrar(st.session_state.get("usuario", "?"),
+                                   "Creó usuario", nu.strip())
                     st.success(f"✔ Usuario '{nu}' creado.")
                     st.rerun()
 
         st.divider()
         st.subheader("Respaldo de usuarios")
-        usuarios_actuales = cargar_usuarios()
         st.download_button(
             label="⬇️ Descargar usuarios.json",
-            data=json.dumps(usuarios_actuales, ensure_ascii=False, indent=2).encode("utf-8"),
-            file_name="usuarios.json",
-            mime="application/json",
-            key="dl_usuarios"
+            data=json.dumps(cargar_usuarios(), ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name="usuarios.json", mime="application/json", key="dl_usuarios"
         )
-
         st.divider()
         st.subheader("Restaurar usuarios desde archivo")
-        archivo_usuarios = st.file_uploader("Subir usuarios.json", type=["json"], key="up_usuarios")
-        if archivo_usuarios:
+        archivo_usr = st.file_uploader("Subir usuarios.json", type=["json"], key="up_usuarios")
+        if archivo_usr:
             if st.button("📂 Cargar usuarios"):
                 try:
-                    datos = json.loads(archivo_usuarios.read().decode("utf-8"))
+                    datos = json.loads(archivo_usr.read().decode("utf-8"))
                     if not isinstance(datos, list):
                         st.error("❌ El archivo no tiene el formato correcto.")
                     else:
                         guardar_usuarios(datos)
+                        hist.registrar(st.session_state.get("usuario", "?"),
+                                       "Restauró usuarios", f"{len(datos)} usuarios")
                         st.success(f"✔ Usuarios restaurados — {len(datos)} usuarios cargados.")
                         st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error al leer el archivo: {e}")
 
-    # ── TAB DESCARGAS ─────────────────────────────────────
-    with tab_descargas:
+    # ── TAB DESCARGAS ──────────────────────────────────
+    with tab_dl:
         st.subheader("Descargas en parquet")
         actividades = obtener_actividades()
-
         if actividades:
             st.markdown("**Por actividad**")
             ac_dl = st.selectbox("Seleccione actividad", actividades, key="ac_dl")
@@ -215,22 +226,34 @@ def master_view():
             if not df_ac.empty:
                 st.download_button(
                     "⬇️ Descargar actividad (.parquet)",
-                    data=a_parquet(df_ac),
-                    file_name=f"{ac_dl}.parquet",
-                    mime="application/octet-stream",
-                    key="dl_ac"
+                    data=a_parquet(df_ac), file_name=f"{ac_dl}.parquet",
+                    mime="application/octet-stream", key="dl_ac"
                 )
             st.divider()
-
         st.markdown("**BASE completa**")
         base = leer_base()
         if not base.empty:
             st.download_button(
                 "⬇️ Descargar BASE completa (.parquet)",
-                data=a_parquet(base),
-                file_name="BASE_COMPLETA.parquet",
-                mime="application/octet-stream",
-                key="dl_base"
+                data=a_parquet(base), file_name="BASE_COMPLETA.parquet",
+                mime="application/octet-stream", key="dl_base"
             )
         else:
             st.info("No hay BASE generada aún.")
+
+    # ── TAB HISTORIAL ─────────────────────────────────
+    with tab_hist:
+        st.subheader("Historial de cambios")
+        entradas = hist.leer_historial()
+        if not entradas:
+            st.info("No hay cambios registrados aún.")
+        else:
+            df_h = pd.DataFrame(entradas)
+            df_h.columns = ["Fecha/Hora", "Usuario", "Acción", "Detalle"]
+            st.caption(f"{len(df_h)} entradas — más reciente primero")
+            st.dataframe(df_h, use_container_width=True, hide_index=True, height=450)
+            st.download_button(
+                "⬇️ Descargar historial (.csv)",
+                data=df_h.to_csv(index=False).encode("utf-8-sig"),
+                file_name="historial.csv", mime="text/csv"
+            )
