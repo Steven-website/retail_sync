@@ -8,6 +8,7 @@ from config import (
     CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
     COLUMNAS_COMERCIALES,
 )
+from github_storage import push_parquet
 
 # ─── HELPERS ──────────────────────────────────────────────
 def _leer_parquet(ruta: str) -> pd.DataFrame:
@@ -85,6 +86,7 @@ def subir_bd(file) -> pd.DataFrame:
     df = _validar_pk(df)
     df = df.drop_duplicates(subset=[PK], keep="last")
     df.to_parquet(RUTA_BD, index=False)
+    push_parquet(df, "data/BD_ACTUALIZACION.parquet", "update BD_ACTUALIZACION")
     return df
 
 # ─── BASE ─────────────────────────────────────────────────
@@ -108,6 +110,7 @@ def _guardar_base(df: pd.DataFrame):
         df[CAMPO_ACTIVIDAD] = ""
     df[CAMPO_ACTIVIDAD] = df[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
     df.to_parquet(RUTA_BASE, index=False)
+    push_parquet(df, "data/BASE.parquet", "update BASE")
 
 # ─── ACTIVIDADES ──────────────────────────────────────────
 def obtener_actividades() -> list:
