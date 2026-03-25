@@ -250,10 +250,41 @@ def master_view():
         else:
             df_h = pd.DataFrame(entradas)
             df_h.columns = ["Fecha/Hora", "Usuario", "Acción", "Detalle"]
-            st.caption(f"{len(df_h)} entradas — más reciente primero")
-            st.dataframe(df_h, use_container_width=True, hide_index=True, height=450)
+            df_h["_fecha"] = pd.to_datetime(df_h["Fecha/Hora"], errors="coerce").dt.date
+
+            # ── FILTROS ──────────────────────────────────────
+            col_f1, col_f2, col_f3 = st.columns(3)
+
+            with col_f1:
+                usuarios_hist = ["Todos"] + sorted(df_h["Usuario"].dropna().unique().tolist())
+                filtro_usr = st.selectbox("Filtrar por usuario", usuarios_hist, key="h_usr")
+
+            fechas_validas = df_h["_fecha"].dropna()
+            fecha_min = fechas_validas.min() if not fechas_validas.empty else None
+            fecha_max = fechas_validas.max() if not fechas_validas.empty else None
+
+            with col_f2:
+                desde = st.date_input("Desde", value=fecha_min, min_value=fecha_min,
+                                      max_value=fecha_max, key="h_desde")
+            with col_f3:
+                hasta = st.date_input("Hasta", value=fecha_max, min_value=fecha_min,
+                                      max_value=fecha_max, key="h_hasta")
+
+            # ── APLICAR FILTROS ───────────────────────────────
+            df_fil = df_h.copy()
+            if filtro_usr != "Todos":
+                df_fil = df_fil[df_fil["Usuario"] == filtro_usr]
+            if fecha_min is not None:
+                df_fil = df_fil[
+                    (df_fil["_fecha"] >= desde) &
+                    (df_fil["_fecha"] <= hasta)
+                ]
+
+            df_mostrar = df_fil.drop(columns=["_fecha"])
+            st.caption(f"{len(df_mostrar)} entrada(s) — más reciente primero")
+            st.dataframe(df_mostrar, use_container_width=True, hide_index=True, height=400)
             st.download_button(
-                "⬇️ Descargar historial (.csv)",
-                data=df_h.to_csv(index=False).encode("utf-8-sig"),
+                "⬇️ Descargar historial filtrado (.csv)",
+                data=df_mostrar.to_csv(index=False).encode("utf-8-sig"),
                 file_name="historial.csv", mime="text/csv"
             )
