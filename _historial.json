@@ -1,0 +1,10 @@
+{
+  "entradas": [
+    {
+      "ts": "2026-03-25 15:23",
+      "usuario": "admin",
+      "accion": "Creó usuario",
+      "detalle": "Gustavo"
+    }
+  ]
+}
