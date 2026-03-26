@@ -6,6 +6,7 @@ from data_manager import (
     filtrar_por_familias,
     actualizar_desde_csv,
     a_csv,
+    a_excel,
 )
 from queue_manager import handle_queue, submit_op
 import historial as hist
@@ -91,10 +92,19 @@ def adc_view():
     st.dataframe(df_filtrado, use_container_width=True, height=400)
     st.divider()
 
-    st.download_button(
-        "⬇️ Descargar CSV para trabajar",
-        data=a_csv(df_filtrado), file_name=f"{ac}_ADC.csv", mime="text/csv"
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "⬇️ Descargar CSV para trabajar",
+            data=a_csv(df_filtrado), file_name=f"{ac}_ADC.csv", mime="text/csv"
+        )
+    with col2:
+        st.download_button(
+            "⬇️ Descargar Excel para trabajar",
+            data=a_excel(df_filtrado),
+            file_name=f"{ac}_ADC.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
     st.divider()
     st.subheader("📤 Subir archivo trabajado")

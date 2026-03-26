@@ -77,6 +77,12 @@ def a_csv(df: pd.DataFrame) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
+def a_excel(df: pd.DataFrame) -> bytes:
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False, engine="openpyxl")
+    buf.seek(0)
+    return buf.getvalue()
+
 def a_parquet(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     df.to_parquet(buf, index=False)
