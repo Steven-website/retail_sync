@@ -5,7 +5,7 @@ import unicodedata
 from typing import Optional, List
 import pandas as pd
 from config import (
-    RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, PK,
+    RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, PK,
     CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
     COLUMNAS_COMERCIALES,
 )
@@ -366,3 +366,20 @@ def actualizar_desde_csv(
         actividad_final = objetivo.copy()
 
     _guardar_actividad(nombre, actividad_final)
+
+
+# ─── VISUAL MERCHANDISING ────────────────────────────────────────────
+
+def leer_vm() -> pd.DataFrame:
+    return _leer_parquet(RUTA_VM)
+
+def subir_vm(file) -> pd.DataFrame:
+    try:
+        df = pd.read_excel(file, engine="openpyxl")
+    except Exception as e:
+        raise Exception(f"No se pudo leer el Excel: {e}")
+    df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
+    df = df.dropna(how="all")
+    df.to_parquet(RUTA_VM, index=False)
+    push_parquet(df, "data/VM_MERCHANDISING.parquet", "update VM_MERCHANDISING")
+    return df

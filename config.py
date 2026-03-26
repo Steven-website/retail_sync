@@ -7,6 +7,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 RUTA_BD          = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
 RUTA_BASE        = os.path.join(DATA_DIR, "BASE.parquet")  # legado
 RUTA_ACTIVIDADES = os.path.join(DATA_DIR, "actividades")
+RUTA_VM          = os.path.join(DATA_DIR, "VM_MERCHANDISING.parquet")
 RUTA_USERS       = os.path.join(BASE_DIR, "usuarios.json")
 os.makedirs(RUTA_ACTIVIDADES, exist_ok=True)
 
@@ -28,7 +29,8 @@ COLUMNAS_COMERCIALES = [
 ROL_MASTER       = "MASTER"
 ROL_ADC          = "ADC"
 ROL_VISUALIZADOR = "VISUALIZADOR"
-ROLES_DISPONIBLES = [ROL_MASTER, ROL_ADC, ROL_VISUALIZADOR]
+ROL_VM           = "VM"
+ROLES_DISPONIBLES = [ROL_MASTER, ROL_ADC, ROL_VISUALIZADOR, ROL_VM]
 
 FAMILIAS_DISPONIBLES = [
     "No_Registrado", "NAVIDAD", "ELECTRODOMESTICOS", "JUGUETERIA",

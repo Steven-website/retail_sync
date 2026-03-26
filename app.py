@@ -1,9 +1,10 @@
 import streamlit as st
 from auth import init_session, login_view, sidebar_usuario
-from config import ROL_MASTER, ROL_ADC, ROL_VISUALIZADOR
+from config import ROL_MASTER, ROL_ADC, ROL_VISUALIZADOR, ROL_VM
 from roles.master_view       import master_view
 from roles.adc_view          import adc_view
 from roles.visualizador_view import visualizador_view
+from roles.vm_view           import vm_view
 
 st.set_page_config(page_title="Retail Sync", layout="wide")
 init_session()
@@ -21,6 +22,7 @@ ROUTER = {
     ROL_MASTER:       master_view,
     ROL_ADC:          adc_view,
     ROL_VISUALIZADOR: visualizador_view,
+    ROL_VM:           vm_view,
 }
 
 vista = ROUTER.get(st.session_state.rol)
