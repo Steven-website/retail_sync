@@ -91,5 +91,39 @@
       "SERVICIOS",
       "GENERAL"
     ]
+  },
+  {
+    "usuario": "Ashly",
+    "password": "Ashly123",
+    "rol": "VM",
+    "familias": [
+      "No_Registrado",
+      "NAVIDAD",
+      "ELECTRODOMESTICOS",
+      "JUGUETERIA",
+      "AUTOMOTRIZ",
+      "FIESTA",
+      "DEPORTE",
+      "FERRETERIA",
+      "CUIDADO PERSONAL",
+      "BEBE",
+      "TIENDA",
+      "DETALLES",
+      "LIBRERIA",
+      "MERMA RECUPERABLE",
+      "HOGAR",
+      "JARDINERIA",
+      "COMESTIBLE",
+      "ZAPATERIA",
+      "ANTIGUA COMESTIBLE",
+      "RECREACION",
+      "PERFUMERIA",
+      "MASCOTAS",
+      "SUMINISTROS",
+      "MUEBLES",
+      "Línea reserv. serv.",
+      "SERVICIOS",
+      "GENERAL"
+    ]
   }
 ]
