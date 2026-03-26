@@ -23,6 +23,12 @@
       "usuario": "admin",
       "accion": "Creó usuario",
       "detalle": "Ashly"
+    },
+    {
+      "ts": "2026-03-26 20:36",
+      "usuario": "Ashly",
+      "accion": "Subió VM Merchandising",
+      "detalle": "2 filas"
     }
   ]
 }
