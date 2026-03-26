@@ -5,5 +5,12 @@
     "operation": "Actualizar DIA DEL PADRE — familias: JUGUETERIA",
     "since": "2026-03-26T18:57:03.812504+00:00"
   },
-  "waiting": []
+  "waiting": [
+    {
+      "ticket": "a01b4a8b",
+      "user": "Gustavo",
+      "operation": "Actualizar DIA DEL PADRE — familias: JUGUETERIA",
+      "joined": "2026-03-26T18:57:04.450931+00:00"
+    }
+  ]
 }
