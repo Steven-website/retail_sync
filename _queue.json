@@ -1,16 +1,9 @@
 {
   "processing": {
-    "ticket": "ff3063fd",
-    "user": "Gustavo",
-    "operation": "Actualizar DIA DEL PADRE — familias: JUGUETERIA",
-    "since": "2026-03-26T18:57:03.812504+00:00"
+    "ticket": "49ff93b7",
+    "user": "admin",
+    "operation": "Guardar BD_ACTUALIZACION",
+    "since": "2026-03-27T13:31:11.995864+00:00"
   },
-  "waiting": [
-    {
-      "ticket": "a01b4a8b",
-      "user": "Gustavo",
-      "operation": "Actualizar DIA DEL PADRE — familias: JUGUETERIA",
-      "joined": "2026-03-26T18:57:04.450931+00:00"
-    }
-  ]
+  "waiting": []
 }
