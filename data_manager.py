@@ -5,7 +5,7 @@ import unicodedata
 from typing import Optional, List
 import pandas as pd
 from config import (
-    RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, PK,
+    RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, RUTA_FILTRO_AC, PK,
     CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
     COLUMNAS_COMERCIALES,
 )
@@ -383,3 +383,87 @@ def subir_vm(file) -> pd.DataFrame:
     df.to_parquet(RUTA_VM, index=False)
     push_parquet(df, "data/VM_MERCHANDISING.parquet", "update VM_MERCHANDISING")
     return df
+
+
+# ─── FILTRO ACTIVIDAD COMERCIAL ──────────────────────────────────────
+
+def _normalizar_col(name: str) -> str:
+    """Normaliza nombre de columna: mayúsculas, sin tildes, espacios→guión bajo."""
+    txt = str(name).strip().upper()
+    txt = unicodedata.normalize("NFKD", txt)
+    txt = "".join(c for c in txt if not unicodedata.combining(c))
+    txt = re.sub(r'[\s\-]+', '_', txt)
+    return txt
+
+def leer_filtro_ac() -> pd.DataFrame:
+    return _leer_parquet(RUTA_FILTRO_AC)
+
+def subir_filtro_ac(file) -> pd.DataFrame:
+    try:
+        df = pd.read_excel(file, engine="openpyxl")
+    except Exception as e:
+        raise Exception(f"No se pudo leer el Excel: {e}")
+    df = df.dropna(how="all")
+    df.columns = [_normalizar_col(c) for c in df.columns]
+    required = ["ACTIVIDAD_COMERCIAL", "FAMILIA", "CATEGORIA", "SUBCATEGORIA"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise Exception(f"Faltan columnas requeridas: {', '.join(missing)}. "
+                        f"Columnas encontradas: {list(df.columns)}")
+    df = df[required].drop_duplicates()
+    df.to_parquet(RUTA_FILTRO_AC, index=False)
+    push_parquet(df, "data/FILTRO_AC.parquet", "update FILTRO_AC")
+    return df
+
+def filtrar_por_ac(df: pd.DataFrame, actividad: str) -> pd.DataFrame:
+    """Filtra df según el mapping Actividad→(Familia, Categoría, Subcategoría).
+    Si no hay archivo de filtro o la actividad no aparece en él, devuelve df sin cambios."""
+    filtro = leer_filtro_ac()
+    if filtro.empty:
+        return df
+
+    filtro_ac = filtro[
+        filtro["ACTIVIDAD_COMERCIAL"].apply(_normalizar) == _normalizar(actividad)
+    ]
+    if filtro_ac.empty:
+        return df  # actividad no mapeada → sin filtro
+
+    # Mapear columnas del df (normalizado → nombre real)
+    df_cols = {_normalizar_col(c): c for c in df.columns}
+    df_col_fam = df_cols.get("FAMILIA")
+    df_col_cat = df_cols.get("CATEGORIA")
+    df_col_sub = df_cols.get("SUBCATEGORIA")
+
+    if df_col_fam is None:
+        return df  # sin columna FAMILIA → no se puede filtrar
+
+    use_cat = df_col_cat is not None
+    use_sub = df_col_sub is not None and use_cat
+
+    if use_sub:
+        valid = set(zip(
+            filtro_ac["FAMILIA"].apply(_normalizar),
+            filtro_ac["CATEGORIA"].apply(_normalizar),
+            filtro_ac["SUBCATEGORIA"].apply(_normalizar),
+        ))
+        keys = zip(
+            df[df_col_fam].apply(_normalizar),
+            df[df_col_cat].apply(_normalizar),
+            df[df_col_sub].apply(_normalizar),
+        )
+    elif use_cat:
+        valid = set(zip(
+            filtro_ac["FAMILIA"].apply(_normalizar),
+            filtro_ac["CATEGORIA"].apply(_normalizar),
+        ))
+        keys = zip(
+            df[df_col_fam].apply(_normalizar),
+            df[df_col_cat].apply(_normalizar),
+        )
+    else:
+        valid = set(filtro_ac["FAMILIA"].apply(_normalizar))
+        mask = df[df_col_fam].apply(_normalizar).isin(valid)
+        return df[mask].copy()
+
+    mask = pd.Series([k in valid for k in keys], index=df.index)
+    return df[mask].copy()

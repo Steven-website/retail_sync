@@ -1,5 +1,5 @@
 import streamlit as st
-from data_manager import obtener_actividades, dataset_actividad, a_excel
+from data_manager import obtener_actividades, dataset_actividad, a_excel, filtrar_por_ac
 
 def visualizador_view():
     st.header("👁️ Panel VISUALIZADOR")
@@ -17,6 +17,7 @@ def visualizador_view():
         st.warning("La actividad no tiene datos.")
         return
 
+    df = filtrar_por_ac(df, ac)
     st.caption(f"Registros: {len(df):,}")
     st.dataframe(df, use_container_width=True, height=450)
     st.divider()

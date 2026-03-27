@@ -4,6 +4,7 @@ from data_manager import (
     obtener_actividades,
     dataset_actividad,
     filtrar_por_familias,
+    filtrar_por_ac,
     actualizar_desde_csv,
     a_excel,
 )
@@ -76,6 +77,7 @@ def adc_view():
         st.warning("La actividad no tiene datos.")
         return
 
+    df = filtrar_por_ac(df, ac)
     df_filtrado = filtrar_por_familias(df, familias)
     if df_filtrado.empty:
         st.warning("No hay artículos para sus familias en esta actividad.")
