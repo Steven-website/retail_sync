@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from data_manager import obtener_actividades, leer_filtro_act, actualizar_filtro_vm, a_excel
+from data_manager import obtener_actividades, leer_vm_act, actualizar_vm_ac, a_excel
 import historial as hist
 
 
@@ -24,18 +24,18 @@ def vm_view():
 
     ac = st.selectbox("Seleccione actividad", actividades)
 
-    filtro = leer_filtro_act(ac)
-    if filtro.empty:
+    df_vm = leer_vm_act(ac)
+    if df_vm.empty:
         st.warning("⚠️ Esta actividad no tiene filtro cargado. El Master debe cargarlo primero.")
         return
 
-    st.caption(f"Registros: {len(filtro):,}")
-    st.dataframe(filtro, use_container_width=True, height=400)
+    st.caption(f"Registros: {len(df_vm):,}")
+    st.dataframe(df_vm, use_container_width=True, height=400)
     st.divider()
 
     st.download_button(
         "⬇️ Descargar Excel para trabajar",
-        data=a_excel(filtro),
+        data=a_excel(df_vm),
         file_name=f"{ac}_VM.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -64,7 +64,7 @@ def vm_view():
         if st.button("✅ Guardar"):
             try:
                 datos = _leer_excel(archivo)
-                actualizar_filtro_vm(ac, datos)
+                actualizar_vm_ac(ac, datos)
                 hist.registrar(
                     st.session_state.get("usuario", "?"),
                     "Actualizó VM",
