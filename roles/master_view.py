@@ -8,10 +8,21 @@ from data_manager import (
     leer_bd, subir_bd, leer_base,
     obtener_actividades,
     crear_actividad, eliminar_actividad, regenerar_actividad,
-    dataset_actividad, a_parquet,
+    dataset_actividad, a_excel, a_parquet,
+    actualizar_desde_csv,
 )
 from queue_manager import handle_queue, submit_op
 import historial as hist
+
+
+def _leer_excel(archivo) -> "pd.DataFrame":
+    archivo.seek(0)
+    try:
+        df = pd.read_excel(archivo, engine="openpyxl")
+        df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
+        return df
+    except Exception as e:
+        raise Exception(f"No se pudo leer el archivo Excel. Verifique el archivo. ({e})")
 
 
 def _bd_subir_bytes(data_bytes):
@@ -39,6 +50,10 @@ def _h_regenerar(nombre):
     hist.registrar(st.session_state.get("usuario", "?"), "Regeneró actividad", nombre)
     return result
 
+def _h_actualizar_master(ac, datos):
+    actualizar_desde_csv(ac, datos, familias_permitidas=None)
+    hist.registrar(st.session_state.get("usuario", "?"), "Actualizó datos (MASTER)", ac)
+
 
 def master_view():
     st.header("👑 Panel MASTER")
@@ -57,6 +72,7 @@ def master_view():
             "actividad_crear":     _h_crear,
             "actividad_eliminar":  _h_eliminar,
             "actividad_regenerar": _h_regenerar,
+            "master_actualizar":   _h_actualizar_master,
         })
     except Exception as e:
         st.error(f"❌ {e}")
@@ -67,8 +83,8 @@ def master_view():
         st.success("✔ Operación completada.")
 
     # ── TABS ─────────────────────────────────────────────
-    tab_bd, tab_act, tab_usr, tab_dl, tab_hist = st.tabs([
-        "📂 BD", "⚙️ Actividades", "👥 Usuarios", "⬇️ Descargas", "📋 Historial"
+    tab_bd, tab_act, tab_usr, tab_edit, tab_dl, tab_hist = st.tabs([
+        "📂 BD", "⚙️ Actividades", "👥 Usuarios", "✏️ Edición", "⬇️ Descargas", "📋 Historial"
     ])
 
     # ── TAB BD ──────────────────────────────────────────
@@ -189,6 +205,61 @@ def master_view():
                                    "Creó usuario", nu.strip())
                     st.success(f"✔ Usuario '{nu}' creado.")
                     st.rerun()
+
+    # ── TAB EDICIÓN ────────────────────────────────────
+    with tab_edit:
+        actividades_edit = obtener_actividades()
+        if not actividades_edit:
+            st.warning("No hay actividades disponibles.")
+        else:
+            ac_e = st.selectbox("Seleccione actividad", actividades_edit, key="ac_edit")
+            df_e = dataset_actividad(ac_e)
+            if df_e.empty:
+                st.warning("La actividad no tiene datos.")
+            else:
+                st.caption(f"Registros: {len(df_e):,}")
+                st.dataframe(df_e, use_container_width=True, height=400)
+                st.divider()
+
+                st.download_button(
+                    "⬇️ Descargar Excel para trabajar",
+                    data=a_excel(df_e),
+                    file_name=f"{ac_e}_MASTER.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+                st.divider()
+                st.subheader("📤 Subir archivo trabajado")
+                st.caption("Reemplaza los datos comerciales de todos los artículos de la actividad.")
+
+                if "upload_key_master" not in st.session_state:
+                    st.session_state.upload_key_master = 0
+
+                archivo_e = st.file_uploader(
+                    "Seleccione Excel trabajado", type=["xlsx"],
+                    key=f"uploader_master_{st.session_state.upload_key_master}"
+                )
+
+                if archivo_e:
+                    try:
+                        preview_e = _leer_excel(archivo_e)
+                        st.caption(f"Vista previa: {len(preview_e):,} filas · {len(preview_e.columns)} columnas")
+                        st.dataframe(preview_e.head(5), use_container_width=True)
+                    except Exception as e:
+                        st.error(f"❌ {e}")
+                    else:
+                        if st.button("✅ Actualizar BASE"):
+                            try:
+                                datos_e = _leer_excel(archivo_e)
+                                submit_op(
+                                    "master_actualizar",
+                                    f"Actualizar {ac_e} (MASTER — todas las familias)",
+                                    {"ac": ac_e, "datos": datos_e},
+                                )
+                                st.session_state.upload_key_master += 1
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ {e}")
 
     # ── TAB DESCARGAS ──────────────────────────────────
     with tab_dl:
