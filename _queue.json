@@ -1,4 +1,9 @@
 {
-  "processing": null,
+  "processing": {
+    "ticket": "afd041a4",
+    "user": "admin",
+    "operation": "Guardar BD_ACTUALIZACION",
+    "since": "2026-03-27T13:43:16.215509+00:00"
+  },
   "waiting": []
 }
