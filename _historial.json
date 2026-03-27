@@ -47,6 +47,12 @@
       "usuario": "admin",
       "accion": "Regeneró TODAS las actividades",
       "detalle": "2 actividades regeneradas"
+    },
+    {
+      "ts": "2026-03-27 14:21",
+      "usuario": "admin",
+      "accion": "Subió Filtro AC",
+      "detalle": "DIA DE LA MADRE — 167 combinaciones"
     }
   ]
 }
