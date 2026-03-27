@@ -53,6 +53,12 @@
       "usuario": "admin",
       "accion": "Subió Filtro AC",
       "detalle": "DIA DE LA MADRE — 167 combinaciones"
+    },
+    {
+      "ts": "2026-03-27 14:23",
+      "usuario": "admin",
+      "accion": "Creó usuario",
+      "detalle": "Andrea"
     }
   ]
 }
