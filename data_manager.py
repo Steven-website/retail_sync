@@ -5,7 +5,7 @@ import unicodedata
 from typing import Optional, List
 import pandas as pd
 from config import (
-    RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, RUTA_FILTRO_AC, PK,
+    RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, RUTA_FILTROS_AC, PK,
     CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
     COLUMNAS_COMERCIALES,
 )
@@ -385,66 +385,69 @@ def subir_vm(file) -> pd.DataFrame:
     return df
 
 
-# ─── FILTRO ACTIVIDAD COMERCIAL ──────────────────────────────────────
+# ─── FILTRO ACTIVIDAD COMERCIAL (por actividad) ──────────────────────
 
 def _normalizar_col(name: str) -> str:
-    """Normaliza nombre de columna: mayúsculas, sin tildes, espacios→guión bajo."""
     txt = str(name).strip().upper()
     txt = unicodedata.normalize("NFKD", txt)
     txt = "".join(c for c in txt if not unicodedata.combining(c))
     txt = re.sub(r'[\s\-]+', '_', txt)
     return txt
 
-def leer_filtro_ac() -> pd.DataFrame:
-    return _leer_parquet(RUTA_FILTRO_AC)
+def _ruta_filtro_act(nombre: str) -> str:
+    return os.path.join(RUTA_FILTROS_AC, f"{_safe_name(nombre)}.parquet")
 
-def subir_filtro_ac(file) -> pd.DataFrame:
+def _github_path_filtro_act(nombre: str) -> str:
+    return f"data/filtros_ac/{_safe_name(nombre)}.parquet"
+
+def leer_filtro_act(nombre: str) -> pd.DataFrame:
+    return _leer_parquet(_ruta_filtro_act(nombre))
+
+def subir_filtro_act(nombre: str, file) -> pd.DataFrame:
     try:
         df = pd.read_excel(file, engine="openpyxl")
     except Exception as e:
         raise Exception(f"No se pudo leer el Excel: {e}")
     df = df.dropna(how="all")
     df.columns = [_normalizar_col(c) for c in df.columns]
-    required = ["ACTIVIDAD_COMERCIAL", "FAMILIA", "CATEGORIA", "SUBCATEGORIA"]
+    # Si el Excel trae columna de actividad, filtrar solo la actividad seleccionada
+    if "ACTIVIDAD_COMERCIAL" in df.columns:
+        df = df[df["ACTIVIDAD_COMERCIAL"].apply(_normalizar) == _normalizar(nombre)]
+        df = df.drop(columns=["ACTIVIDAD_COMERCIAL"])
+    required = ["FAMILIA", "CATEGORIA", "SUBCATEGORIA"]
     missing = [c for c in required if c not in df.columns]
     if missing:
-        raise Exception(f"Faltan columnas requeridas: {', '.join(missing)}. "
-                        f"Columnas encontradas: {list(df.columns)}")
+        raise Exception(f"Faltan columnas: {', '.join(missing)}. "
+                        f"Encontradas: {list(df.columns)}")
     df = df[required].drop_duplicates()
-    df.to_parquet(RUTA_FILTRO_AC, index=False)
-    push_parquet(df, "data/FILTRO_AC.parquet", "update FILTRO_AC")
+    os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
+    df.to_parquet(_ruta_filtro_act(nombre), index=False)
+    push_parquet(df, _github_path_filtro_act(nombre), f"update filtro {nombre}")
     return df
 
 def filtrar_por_ac(df: pd.DataFrame, actividad: str) -> pd.DataFrame:
-    """Filtra df según el mapping Actividad→(Familia, Categoría, Subcategoría).
-    Si no hay archivo de filtro o la actividad no aparece en él, devuelve df sin cambios."""
-    filtro = leer_filtro_ac()
+    """Filtra df con el filtro de la actividad (Familia/Categoría/Subcategoría).
+    Si no hay filtro para la actividad, devuelve df sin cambios."""
+    filtro = leer_filtro_act(actividad)
     if filtro.empty:
         return df
 
-    filtro_ac = filtro[
-        filtro["ACTIVIDAD_COMERCIAL"].apply(_normalizar) == _normalizar(actividad)
-    ]
-    if filtro_ac.empty:
-        return df  # actividad no mapeada → sin filtro
-
-    # Mapear columnas del df (normalizado → nombre real)
     df_cols = {_normalizar_col(c): c for c in df.columns}
     df_col_fam = df_cols.get("FAMILIA")
     df_col_cat = df_cols.get("CATEGORIA")
     df_col_sub = df_cols.get("SUBCATEGORIA")
 
     if df_col_fam is None:
-        return df  # sin columna FAMILIA → no se puede filtrar
+        return df
 
     use_cat = df_col_cat is not None
     use_sub = df_col_sub is not None and use_cat
 
     if use_sub:
         valid = set(zip(
-            filtro_ac["FAMILIA"].apply(_normalizar),
-            filtro_ac["CATEGORIA"].apply(_normalizar),
-            filtro_ac["SUBCATEGORIA"].apply(_normalizar),
+            filtro["FAMILIA"].apply(_normalizar),
+            filtro["CATEGORIA"].apply(_normalizar),
+            filtro["SUBCATEGORIA"].apply(_normalizar),
         ))
         keys = zip(
             df[df_col_fam].apply(_normalizar),
@@ -453,15 +456,15 @@ def filtrar_por_ac(df: pd.DataFrame, actividad: str) -> pd.DataFrame:
         )
     elif use_cat:
         valid = set(zip(
-            filtro_ac["FAMILIA"].apply(_normalizar),
-            filtro_ac["CATEGORIA"].apply(_normalizar),
+            filtro["FAMILIA"].apply(_normalizar),
+            filtro["CATEGORIA"].apply(_normalizar),
         ))
         keys = zip(
             df[df_col_fam].apply(_normalizar),
             df[df_col_cat].apply(_normalizar),
         )
     else:
-        valid = set(filtro_ac["FAMILIA"].apply(_normalizar))
+        valid = set(filtro["FAMILIA"].apply(_normalizar))
         mask = df[df_col_fam].apply(_normalizar).isin(valid)
         return df[mask].copy()
 

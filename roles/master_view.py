@@ -10,7 +10,7 @@ from data_manager import (
     crear_actividad, eliminar_actividad, regenerar_actividad,
     dataset_actividad, a_excel, a_parquet,
     actualizar_desde_csv,
-    leer_filtro_ac, subir_filtro_ac, filtrar_por_ac,
+    leer_filtro_act, subir_filtro_act, filtrar_por_ac,
 )
 from queue_manager import handle_queue, submit_op
 import historial as hist
@@ -91,33 +91,58 @@ def master_view():
     # ── TAB FILTRO AC ───────────────────────────────────
     with tab_fac:
         st.subheader("Filtro por Actividad Comercial")
-        st.caption("Excel con columnas: Actividad Comercial · Familia · Categoría · Subcategoría")
-        fac = leer_filtro_ac()
-        if not fac.empty:
-            st.success(f"✔ Filtro cargado — {len(fac):,} combinaciones · {fac['ACTIVIDAD_COMERCIAL'].nunique()} actividades")
-            st.dataframe(fac, use_container_width=True, height=300)
+        st.caption("Seleccione la actividad y cargue su Excel con columnas: Familia · Categoría · Subcategoría")
+
+        actividades_fac = obtener_actividades()
+        if not actividades_fac:
+            st.warning("No hay actividades disponibles.")
         else:
-            st.warning("⚠️ No hay filtro cargado. Sin filtro se muestran todos los artículos.")
-        archivo_fac = st.file_uploader("Subir Filtro AC (.xlsx)", type=["xlsx"], key="fac_uploader")
-        if archivo_fac:
-            try:
-                archivo_fac.seek(0)
-                df_fac_prev = pd.read_excel(archivo_fac, engine="openpyxl")
-                st.caption(f"Vista previa: {len(df_fac_prev):,} filas")
-                st.dataframe(df_fac_prev.head(5), use_container_width=True)
-            except Exception as e:
-                st.error(f"❌ {e}")
+            ac_fac = st.selectbox("Seleccione actividad", actividades_fac, key="ac_fac")
+
+            filtro_actual = leer_filtro_act(ac_fac)
+            if not filtro_actual.empty:
+                st.success(f"✔ Filtro cargado — {len(filtro_actual):,} combinaciones")
+                st.dataframe(filtro_actual, use_container_width=True, height=300)
+                st.download_button(
+                    "⬇️ Descargar filtro actual",
+                    data=a_excel(filtro_actual),
+                    file_name=f"FILTRO_{ac_fac}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_filtro"
+                )
             else:
-                if st.button("💾 Guardar Filtro AC"):
-                    try:
-                        archivo_fac.seek(0)
-                        df_saved = subir_filtro_ac(archivo_fac)
-                        hist.registrar(st.session_state.get("usuario", "?"),
-                                       "Subió Filtro AC", f"{len(df_saved):,} combinaciones")
-                        st.success("✔ Filtro guardado correctamente.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ {e}")
+                st.warning("⚠️ Esta actividad no tiene filtro. Se muestran todos los artículos.")
+
+            st.divider()
+            st.subheader("📤 Subir filtro")
+
+            if "upload_key_fac" not in st.session_state:
+                st.session_state.upload_key_fac = 0
+
+            archivo_fac = st.file_uploader(
+                "Seleccione Excel (.xlsx)", type=["xlsx"],
+                key=f"fac_uploader_{st.session_state.upload_key_fac}"
+            )
+            if archivo_fac:
+                try:
+                    archivo_fac.seek(0)
+                    df_fac_prev = pd.read_excel(archivo_fac, engine="openpyxl")
+                    st.caption(f"Vista previa: {len(df_fac_prev):,} filas · {len(df_fac_prev.columns)} columnas")
+                    st.dataframe(df_fac_prev.head(5), use_container_width=True)
+                except Exception as e:
+                    st.error(f"❌ {e}")
+                else:
+                    if st.button("💾 Guardar filtro"):
+                        try:
+                            archivo_fac.seek(0)
+                            df_saved = subir_filtro_act(ac_fac, archivo_fac)
+                            hist.registrar(st.session_state.get("usuario", "?"),
+                                           "Subió Filtro AC", f"{ac_fac} — {len(df_saved):,} combinaciones")
+                            st.session_state.upload_key_fac += 1
+                            st.success("✔ Filtro guardado correctamente.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ {e}")
 
     # ── TAB BD ──────────────────────────────────────────
     with tab_bd:

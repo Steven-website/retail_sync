@@ -8,8 +8,9 @@ RUTA_BD          = os.path.join(DATA_DIR, "BD_ACTUALIZACION.parquet")
 RUTA_BASE        = os.path.join(DATA_DIR, "BASE.parquet")  # legado
 RUTA_ACTIVIDADES = os.path.join(DATA_DIR, "actividades")
 RUTA_VM          = os.path.join(DATA_DIR, "VM_MERCHANDISING.parquet")
-RUTA_FILTRO_AC   = os.path.join(DATA_DIR, "FILTRO_AC.parquet")
+RUTA_FILTROS_AC  = os.path.join(DATA_DIR, "filtros_ac")
 RUTA_USERS       = os.path.join(BASE_DIR, "usuarios.json")
+os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
 os.makedirs(RUTA_ACTIVIDADES, exist_ok=True)
 
 PK               = "PK_Articulos"
