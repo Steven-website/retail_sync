@@ -428,6 +428,15 @@ def subir_filtro_act(nombre: str, file) -> pd.DataFrame:
 
 # ─── VM POR ACTIVIDAD ─────────────────────────────────────────────────
 
+def obtener_actividades_vm() -> list:
+    """Retorna solo actividades que tienen filtro cargado por el Master."""
+    os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
+    filtros = {f for f in os.listdir(RUTA_FILTROS_AC) if f.endswith(".parquet")}
+    return sorted([
+        ac for ac in obtener_actividades()
+        if f"{_safe_name(ac)}.parquet" in filtros
+    ])
+
 def _ruta_vm_act(nombre: str) -> str:
     return os.path.join(RUTA_VM_AC, f"{_safe_name(nombre)}.parquet")
 

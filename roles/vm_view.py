@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from data_manager import obtener_actividades, leer_vm_act, actualizar_vm_ac, a_excel
+from data_manager import obtener_actividades_vm, leer_vm_act, actualizar_vm_ac, a_excel
 import historial as hist
 
 
@@ -17,9 +17,9 @@ def _leer_excel(archivo) -> pd.DataFrame:
 def vm_view():
     st.header("🏪 Panel Visual Merchandising")
 
-    actividades = obtener_actividades()
+    actividades = obtener_actividades_vm()
     if not actividades:
-        st.warning("No hay actividades disponibles.")
+        st.warning("No hay actividades disponibles. El Master debe cargar el filtro primero.")
         return
 
     ac = st.selectbox("Seleccione actividad", actividades)
