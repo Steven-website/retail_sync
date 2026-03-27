@@ -296,47 +296,50 @@ def master_view():
                 st.warning("La actividad no tiene datos.")
             else:
                 df_e = filtrar_por_ac(df_e, ac_e)
-                st.caption(f"Registros: {len(df_e):,}")
-                st.dataframe(df_e, use_container_width=True, height=400)
-                st.divider()
+                if df_e.empty:
+                    st.warning("El filtro de esta actividad no coincide con ningún artículo.")
+                else:
+                    st.caption(f"Registros: {len(df_e):,}")
+                    st.dataframe(df_e, use_container_width=True, height=400)
+                    st.divider()
 
-                st.download_button(
-                    "⬇️ Descargar Excel para trabajar",
-                    data=a_excel(df_e),
-                    file_name=f"{ac_e}_MASTER.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                    st.download_button(
+                        "⬇️ Descargar Excel para trabajar",
+                        data=a_excel(df_e),
+                        file_name=f"{ac_e}_MASTER.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
 
-                st.divider()
-                st.subheader("📤 Subir archivo trabajado")
-                st.caption("Reemplaza los datos comerciales de todos los artículos de la actividad.")
+                    st.divider()
+                    st.subheader("📤 Subir archivo trabajado")
+                    st.caption("Reemplaza los datos comerciales de todos los artículos de la actividad.")
 
-                if "upload_key_master" not in st.session_state:
-                    st.session_state.upload_key_master = 0
+                    if "upload_key_master" not in st.session_state:
+                        st.session_state.upload_key_master = 0
 
-                archivo_e = st.file_uploader(
-                    "Seleccione Excel trabajado", type=["xlsx"],
-                    key=f"uploader_master_{st.session_state.upload_key_master}"
-                )
+                    archivo_e = st.file_uploader(
+                        "Seleccione Excel trabajado", type=["xlsx"],
+                        key=f"uploader_master_{st.session_state.upload_key_master}"
+                    )
 
-                if archivo_e:
-                    try:
-                        preview_e = _leer_excel(archivo_e)
-                        st.caption(f"Vista previa: {len(preview_e):,} filas · {len(preview_e.columns)} columnas")
-                        st.dataframe(preview_e.head(5), use_container_width=True)
-                    except Exception as e:
-                        st.error(f"❌ {e}")
-                    else:
-                        if st.button("✅ Actualizar BASE"):
-                            try:
-                                datos_e = _leer_excel(archivo_e)
-                                submit_op(
-                                    "master_actualizar",
-                                    f"Actualizar {ac_e} (MASTER — todas las familias)",
-                                    {"ac": ac_e, "datos": datos_e},
-                                )
-                                st.session_state.upload_key_master += 1
-                                st.rerun()
+                    if archivo_e:
+                        try:
+                            preview_e = _leer_excel(archivo_e)
+                            st.caption(f"Vista previa: {len(preview_e):,} filas · {len(preview_e.columns)} columnas")
+                            st.dataframe(preview_e.head(5), use_container_width=True)
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                        else:
+                            if st.button("✅ Actualizar BASE"):
+                                try:
+                                    datos_e = _leer_excel(archivo_e)
+                                    submit_op(
+                                        "master_actualizar",
+                                        f"Actualizar {ac_e} (MASTER — todas las familias)",
+                                        {"ac": ac_e, "datos": datos_e},
+                                    )
+                                    st.session_state.upload_key_master += 1
+                                    st.rerun()
                             except Exception as e:
                                 st.error(f"❌ {e}")
 

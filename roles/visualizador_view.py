@@ -18,6 +18,10 @@ def visualizador_view():
         return
 
     df = filtrar_por_ac(df, ac)
+    if df.empty:
+        st.warning("El filtro de esta actividad no coincide con ningún artículo.")
+        return
+
     st.caption(f"Registros: {len(df):,}")
     st.dataframe(df, use_container_width=True, height=450)
     st.divider()
