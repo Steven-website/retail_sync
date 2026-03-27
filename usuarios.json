@@ -125,5 +125,15 @@
       "SERVICIOS",
       "GENERAL"
     ]
+  },
+  {
+    "usuario": "Andrea",
+    "password": "Andrea",
+    "rol": "ADC",
+    "familias": [
+      "CUIDADO PERSONAL",
+      "ZAPATERIA",
+      "PERFUMERIA"
+    ]
   }
 ]
