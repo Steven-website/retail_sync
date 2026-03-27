@@ -29,6 +29,12 @@
       "usuario": "Ashly",
       "accion": "Subió VM Merchandising",
       "detalle": "2 filas"
+    },
+    {
+      "ts": "2026-03-27 13:31",
+      "usuario": "admin",
+      "accion": "Subió BD",
+      "detalle": "100,331 filas"
     }
   ]
 }
