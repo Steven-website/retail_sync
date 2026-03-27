@@ -28,6 +28,8 @@ COLUMNAS_COMERCIALES = [
     "COMENTARIO",
 ]
 
+COLUMNAS_VM = [f"R{i:02d}" for i in range(1, 41)]
+
 ROL_MASTER       = "MASTER"
 ROL_ADC          = "ADC"
 ROL_VISUALIZADOR = "VISUALIZADOR"

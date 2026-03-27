@@ -7,7 +7,7 @@ import pandas as pd
 from config import (
     RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, RUTA_FILTROS_AC, PK,
     CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
-    COLUMNAS_COMERCIALES,
+    COLUMNAS_COMERCIALES, COLUMNAS_VM,
 )
 from github_storage import push_parquet, delete_file
 
@@ -419,11 +419,51 @@ def subir_filtro_act(nombre: str, file) -> pd.DataFrame:
     if missing:
         raise Exception(f"Faltan columnas: {', '.join(missing)}. "
                         f"Encontradas: {list(df.columns)}")
-    df = df[required].drop_duplicates()
+    # Preservar columnas R01-R40 si vienen en el archivo
+    extra = [c for c in COLUMNAS_VM if c in df.columns]
+    df = df[required + extra].drop_duplicates(subset=required)
     os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
     df.to_parquet(_ruta_filtro_act(nombre), index=False)
     push_parquet(df, _github_path_filtro_act(nombre), f"update filtro {nombre}")
     return df
+
+def actualizar_filtro_vm(nombre: str, archivo: pd.DataFrame) -> None:
+    """Actualiza solo las columnas R01-R40 en el filtro de la actividad."""
+    filtro = leer_filtro_act(nombre)
+    if filtro.empty:
+        raise Exception(f"No existe filtro para '{nombre}'. El Master debe cargarlo primero.")
+
+    archivo = archivo.copy()
+    archivo.columns = [_normalizar_col(c) for c in archivo.columns]
+
+    key_cols = ["FAMILIA", "CATEGORIA", "SUBCATEGORIA"]
+    missing_keys = [c for c in key_cols if c not in archivo.columns]
+    if missing_keys:
+        raise Exception(f"Faltan columnas clave: {', '.join(missing_keys)}")
+
+    cols_vm = [c for c in COLUMNAS_VM if c in archivo.columns]
+    if not cols_vm:
+        raise Exception("El archivo no tiene columnas R01-R40.")
+
+    for kc in key_cols:
+        if kc not in filtro.columns:
+            raise Exception(f"El filtro no tiene la columna '{kc}'.")
+
+    filtro_idx   = filtro.set_index(key_cols)
+    archivo_idx  = archivo.set_index(key_cols)[cols_vm]
+    comunes      = filtro_idx.index.intersection(archivo_idx.index)
+    if len(comunes) == 0:
+        raise Exception("No hay filas coincidentes entre el archivo y el filtro.")
+
+    for col in cols_vm:
+        if col not in filtro_idx.columns:
+            filtro_idx[col] = None
+        filtro_idx.loc[comunes, col] = archivo_idx.loc[comunes, col]
+
+    filtro_final = filtro_idx.reset_index()
+    os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
+    filtro_final.to_parquet(_ruta_filtro_act(nombre), index=False)
+    push_parquet(filtro_final, _github_path_filtro_act(nombre), f"VM update {nombre}")
 
 def filtrar_por_ac(df: pd.DataFrame, actividad: str) -> pd.DataFrame:
     """Filtra df con el filtro de la actividad (Familia/Categoría/Subcategoría).
