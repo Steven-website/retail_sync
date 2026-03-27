@@ -340,8 +340,8 @@ def master_view():
                                     )
                                     st.session_state.upload_key_master += 1
                                     st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ {e}")
+                                except Exception as e:
+                                    st.error(f"❌ {e}")
 
     # ── TAB DESCARGAS ──────────────────────────────────
     with tab_dl:
