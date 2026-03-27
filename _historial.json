@@ -35,6 +35,12 @@
       "usuario": "admin",
       "accion": "Subió BD",
       "detalle": "100,331 filas"
+    },
+    {
+      "ts": "2026-03-27 13:43",
+      "usuario": "admin",
+      "accion": "Subió BD",
+      "detalle": "100,331 filas"
     }
   ]
 }
