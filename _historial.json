@@ -41,6 +41,12 @@
       "usuario": "admin",
       "accion": "Subió BD",
       "detalle": "100,331 filas"
+    },
+    {
+      "ts": "2026-03-27 13:46",
+      "usuario": "admin",
+      "accion": "Regeneró TODAS las actividades",
+      "detalle": "2 actividades regeneradas"
     }
   ]
 }
