@@ -55,6 +55,18 @@ def _h_actualizar_master(ac, datos):
     actualizar_desde_csv(ac, datos, familias_permitidas=None)
     hist.registrar(st.session_state.get("usuario", "?"), "Actualizó datos (MASTER)", ac)
 
+def _h_regenerar_todas(nombres):
+    errores = []
+    for nombre in nombres:
+        try:
+            regenerar_actividad(nombre)
+        except Exception as e:
+            errores.append(f"{nombre}: {e}")
+    msg = f"{len(nombres)} actividades regeneradas"
+    if errores:
+        msg += f" ({len(errores)} con error)"
+    hist.registrar(st.session_state.get("usuario", "?"), "Regeneró TODAS las actividades", msg)
+
 
 def master_view():
     st.header("👑 Panel MASTER")
@@ -69,11 +81,12 @@ def master_view():
     # ── COLA ───────────────────────────────────────────
     try:
         completed, _ = handle_queue({
-            "bd_subir":            _h_bd_subir,
-            "actividad_crear":     _h_crear,
-            "actividad_eliminar":  _h_eliminar,
-            "actividad_regenerar": _h_regenerar,
-            "master_actualizar":   _h_actualizar_master,
+            "bd_subir":              _h_bd_subir,
+            "actividad_crear":       _h_crear,
+            "actividad_eliminar":    _h_eliminar,
+            "actividad_regenerar":   _h_regenerar,
+            "actividad_regen_todas": _h_regenerar_todas,
+            "master_actualizar":     _h_actualizar_master,
         })
     except Exception as e:
         st.error(f"❌ {e}")
@@ -174,6 +187,14 @@ def master_view():
         if not actividades:
             st.info("No hay actividades creadas aún.")
         else:
+            st.info(f"📋 {len(actividades)} actividad(es): {', '.join(actividades)}")
+            if st.button("🔄 Regenerar TODAS las actividades"):
+                submit_op("actividad_regen_todas",
+                          f"Regenerar todas ({len(actividades)} actividades)",
+                          {"nombres": actividades})
+                st.rerun()
+            st.caption("Regenerar actualiza todas las actividades con la BD actual, conservando los datos comerciales.")
+            st.divider()
             ac = st.selectbox("Seleccione actividad", actividades, key="ac_gestion")
             col1, col2 = st.columns(2)
             with col1:
