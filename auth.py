@@ -55,23 +55,21 @@ def login_view():
 
 def sidebar_usuario():
     with st.sidebar:
-        st.markdown(f"**👤 {st.session_state.usuario}**")
-        st.caption(f"Rol: {st.session_state.rol}")
-        if st.session_state.familias:
-            st.caption(f"Familias: {', '.join(sorted(st.session_state.familias))}")
-        st.divider()
-        if st.button("🚪 Cerrar sesión", use_container_width=True):
-            st.session_state["confirmar_logout"] = True
-        if st.session_state.get("confirmar_logout"):
-            st.warning("¿Seguro que desea cerrar sesión?")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("✅ Sí, salir", use_container_width=True):
-                    cerrar_sesion()
-            with col_b:
-                if st.button("❌ Cancelar", use_container_width=True):
-                    st.session_state["confirmar_logout"] = False
-                    st.rerun()
+        familias = st.session_state.get("familias", [])
+        fam_html = (
+            f'<div class="u-families">📂 {", ".join(sorted(familias))}</div>'
+            if familias else ""
+        )
+        st.markdown(
+            f"""
+            <div class="user-card">
+                <div class="u-name">👤 {st.session_state.usuario}</div>
+                <div class="u-role">Rol: {st.session_state.rol}</div>
+                {fam_html}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 def cerrar_sesion():
     for k in SESSION_DEFAULTS.keys():
