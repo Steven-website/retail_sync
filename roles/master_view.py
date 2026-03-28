@@ -10,7 +10,7 @@ from data_manager import (
     crear_actividad, eliminar_actividad, regenerar_actividad,
     dataset_actividad, a_excel, a_parquet,
     actualizar_desde_csv,
-    leer_filtro_act, subir_filtro_act, filtrar_por_ac,
+    leer_filtro_act, subir_filtro_act,
 )
 from queue_manager import handle_queue, submit_op
 import historial as hist
@@ -326,10 +326,6 @@ def master_view():
             if df_m.empty:
                 st.warning("La actividad no tiene datos.")
             else:
-                df_m = filtrar_por_ac(df_m, ac_m)
-                if df_m.empty:
-                    st.warning("El filtro de esta actividad no coincide con ningún artículo.")
-                else:
                     # ── MÉTRICAS ─────────────────────────────────────
                     mundo_vals = df_m["MUNDO_AC"].fillna("").astype(str).str.strip().str.upper()
                     total     = len(df_m)
