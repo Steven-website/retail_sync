@@ -339,71 +339,8 @@ def master_view():
                     col_m3.metric("❌ NO", f"{no_count:,}")
                     col_m4.metric("⬜ Sin asignar", f"{sin_count:,}")
 
-                    # ── GRÁFICO EN EXPANDER ───────────────────────────
-                    with st.expander("📊 Ver gráfico de avance", expanded=False):
-                        agrup = "FAMILIA"
-
-                        df_chart = df_m[[agrup, "MUNDO_AC"]].copy()
-                        df_chart["ESTADO"] = (
-                            df_chart["MUNDO_AC"]
-                            .fillna("")
-                            .astype(str)
-                            .str.strip()
-                            .str.upper()
-                            .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
-                        )
-
-                        # Calcular porcentajes por grupo
-                        grupo = (
-                            df_chart.groupby([agrup, "ESTADO"])
-                            .size()
-                            .reset_index(name="Cantidad")
-                        )
-                        totales = grupo.groupby(agrup)["Cantidad"].transform("sum")
-                        grupo["Pct"] = (grupo["Cantidad"] / totales * 100).round(1)
-                        grupo["Etiqueta"] = grupo.apply(
-                            lambda r: f"{r['Cantidad']:,} ({r['Pct']}%)", axis=1
-                        )
-
-                        chart = (
-                            alt.Chart(grupo)
-                            .mark_bar()
-                            .encode(
-                                y=alt.Y(f"{agrup}:N", title=None, sort="-x"),
-                                x=alt.X(
-                                    "Pct:Q",
-                                    title="% de artículos",
-                                    scale=alt.Scale(domain=[0, 100]),
-                                    axis=alt.Axis(format=".0f", labelExpr="datum.value + '%'"),
-                                ),
-                                color=alt.Color(
-                                    "ESTADO:N",
-                                    scale=alt.Scale(
-                                        domain=["YES", "NO", "Sin asignar"],
-                                        range=["#2ecc71", "#e74c3c", "#95a5a6"],
-                                    ),
-                                    legend=alt.Legend(title="MUNDO_AC"),
-                                ),
-                                order=alt.Order(
-                                    "ESTADO:N",
-                                    sort="ascending",
-                                ),
-                                tooltip=[
-                                    alt.Tooltip(f"{agrup}:N", title=agrup),
-                                    alt.Tooltip("ESTADO:N", title="Estado"),
-                                    alt.Tooltip("Cantidad:Q", title="Artículos", format=","),
-                                    alt.Tooltip("Pct:Q", title="%", format=".1f"),
-                                ],
-                            )
-                            .properties(
-                                title=f"% de avance MUNDO_AC por {agrup}",
-                                height=max(250, len(grupo[agrup].unique()) * 28),
-                            )
-                        )
-                        st.altair_chart(chart, use_container_width=True)
-
+                    # ── DESCARGA ──────────────────────────────────────
                     st.divider()
-
                     st.download_button(
                         "⬇️ Descargar Excel para trabajar",
                         data=a_excel(df_m),
@@ -412,6 +349,7 @@ def master_view():
                         key="dl_mundo",
                     )
 
+                    # ── SUBIR ─────────────────────────────────────────
                     st.divider()
                     st.subheader("📤 Subir archivo con MUNDO_AC actualizado")
                     st.caption(
@@ -482,6 +420,66 @@ def master_view():
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ {e}")
+
+                    # ── GRÁFICO EN EXPANDER ───────────────────────────
+                    st.divider()
+                    with st.expander("📊 Ver gráfico de avance", expanded=False):
+                        agrup = "FAMILIA"
+
+                        df_chart = df_m[[agrup, "MUNDO_AC"]].copy()
+                        df_chart["ESTADO"] = (
+                            df_chart["MUNDO_AC"]
+                            .fillna("")
+                            .astype(str)
+                            .str.strip()
+                            .str.upper()
+                            .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
+                        )
+
+                        grupo = (
+                            df_chart.groupby([agrup, "ESTADO"])
+                            .size()
+                            .reset_index(name="Cantidad")
+                        )
+                        totales = grupo.groupby(agrup)["Cantidad"].transform("sum")
+                        grupo["Pct"] = (grupo["Cantidad"] / totales * 100).round(1)
+                        grupo["Etiqueta"] = grupo.apply(
+                            lambda r: f"{r['Cantidad']:,} ({r['Pct']}%)", axis=1
+                        )
+
+                        chart = (
+                            alt.Chart(grupo)
+                            .mark_bar()
+                            .encode(
+                                y=alt.Y(f"{agrup}:N", title=None, sort="-x"),
+                                x=alt.X(
+                                    "Pct:Q",
+                                    title="% de artículos",
+                                    scale=alt.Scale(domain=[0, 100]),
+                                    axis=alt.Axis(format=".0f", labelExpr="datum.value + '%'"),
+                                ),
+                                color=alt.Color(
+                                    "ESTADO:N",
+                                    scale=alt.Scale(
+                                        domain=["YES", "NO", "Sin asignar"],
+                                        range=["#2ecc71", "#e74c3c", "#95a5a6"],
+                                    ),
+                                    legend=alt.Legend(title="MUNDO_AC"),
+                                ),
+                                order=alt.Order("ESTADO:N", sort="ascending"),
+                                tooltip=[
+                                    alt.Tooltip(f"{agrup}:N", title=agrup),
+                                    alt.Tooltip("ESTADO:N", title="Estado"),
+                                    alt.Tooltip("Cantidad:Q", title="Artículos", format=","),
+                                    alt.Tooltip("Pct:Q", title="%", format=".1f"),
+                                ],
+                            )
+                            .properties(
+                                title=f"% de avance MUNDO_AC por {agrup}",
+                                height=max(250, len(grupo[agrup].unique()) * 28),
+                            )
+                        )
+                        st.altair_chart(chart, use_container_width=True)
 
     # ── DESCARGAS ─────────────────────────────────────────
     elif pagina == "⬇️ Descargas":
