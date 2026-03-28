@@ -341,9 +341,7 @@ def master_view():
 
                     # ── GRÁFICO EN EXPANDER ───────────────────────────
                     with st.expander("📊 Ver gráfico de avance", expanded=False):
-                        posibles_agrup = [c for c in ["FAMILIA", "CATEGORIA", "SUBCATEGORIA"]
-                                          if c in df_m.columns]
-                        agrup = st.selectbox("Agrupar por", posibles_agrup, key="mundo_agrup")
+                        agrup = "FAMILIA"
 
                         df_chart = df_m[[agrup, "MUNDO_AC"]].copy()
                         df_chart["ESTADO"] = (
