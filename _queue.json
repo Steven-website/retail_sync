@@ -1,4 +1,9 @@
 {
-  "processing": null,
+  "processing": {
+    "ticket": "9b0db8a9",
+    "user": "admin",
+    "operation": "Crear actividad 'VERANO'",
+    "since": "2026-03-28T17:38:55.456438+00:00"
+  },
   "waiting": []
 }
