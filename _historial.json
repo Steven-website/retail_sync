@@ -65,6 +65,12 @@
       "usuario": "admin",
       "accion": "Creó actividad",
       "detalle": "VERANO"
+    },
+    {
+      "ts": "2026-03-28 18:32",
+      "usuario": "admin",
+      "accion": "Actualizó datos (MASTER)",
+      "detalle": "VERANO"
     }
   ]
 }
