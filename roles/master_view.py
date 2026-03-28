@@ -1,5 +1,6 @@
 import io
 import json
+import altair as alt
 import pandas as pd
 import streamlit as st
 from auth import cargar_usuarios, guardar_usuarios
@@ -97,8 +98,8 @@ def master_view():
         st.success("✔ Operación completada.")
 
     # ── TABS ─────────────────────────────────────────────
-    tab_bd, tab_fac, tab_act, tab_usr, tab_edit, tab_dl, tab_hist = st.tabs([
-        "📂 BD", "🗂️ Filtro AC", "⚙️ Actividades", "👥 Usuarios", "✏️ Edición", "⬇️ Descargas", "📋 Historial"
+    tab_bd, tab_fac, tab_act, tab_usr, tab_edit, tab_mundo, tab_dl, tab_hist = st.tabs([
+        "📂 BD", "🗂️ Filtro AC", "⚙️ Actividades", "👥 Usuarios", "✏️ Edición", "🌍 Mundo AC", "⬇️ Descargas", "📋 Historial"
     ])
 
     # ── TAB FILTRO AC ───────────────────────────────────
@@ -340,6 +341,170 @@ def master_view():
                                     )
                                     st.session_state.upload_key_master += 1
                                     st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ {e}")
+
+    # ── TAB MUNDO AC ─────────────────────────────────
+    with tab_mundo:
+        st.subheader("Gestión de MUNDO_AC por Actividad")
+        st.caption("Sin restricciones de familia — el Master puede actualizar cualquier artículo.")
+
+        actividades_mundo = obtener_actividades()
+        if not actividades_mundo:
+            st.warning("No hay actividades disponibles.")
+        else:
+            ac_m = st.selectbox("Seleccione actividad", actividades_mundo, key="ac_mundo")
+            df_m = dataset_actividad(ac_m)
+            if df_m.empty:
+                st.warning("La actividad no tiene datos.")
+            else:
+                df_m = filtrar_por_ac(df_m, ac_m)
+                if df_m.empty:
+                    st.warning("El filtro de esta actividad no coincide con ningún artículo.")
+                else:
+                    # ── MÉTRICAS ─────────────────────────────────────
+                    mundo_vals = df_m["MUNDO_AC"].fillna("").astype(str).str.strip().str.upper()
+                    total       = len(df_m)
+                    yes_count   = (mundo_vals == "YES").sum()
+                    no_count    = (mundo_vals == "NO").sum()
+                    sin_count   = total - yes_count - no_count
+
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    col_m1.metric("Total artículos", f"{total:,}")
+                    col_m2.metric("✅ YES", f"{yes_count:,}")
+                    col_m3.metric("❌ NO", f"{no_count:,}")
+                    col_m4.metric("⬜ Sin asignar", f"{sin_count:,}")
+
+                    # ── GRÁFICO EN EXPANDER ───────────────────────────
+                    with st.expander("📊 Ver gráfico de avance", expanded=False):
+                        posibles_agrup = [c for c in ["FAMILIA", "CATEGORIA", "SUBCATEGORIA"]
+                                          if c in df_m.columns]
+                        agrup = st.selectbox("Agrupar por", posibles_agrup, key="mundo_agrup")
+
+                        df_chart = df_m[[agrup, "MUNDO_AC"]].copy()
+                        df_chart["ESTADO"] = (
+                            df_chart["MUNDO_AC"]
+                            .fillna("")
+                            .astype(str)
+                            .str.strip()
+                            .str.upper()
+                            .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
+                        )
+
+                        grupo = (
+                            df_chart.groupby([agrup, "ESTADO"])
+                            .size()
+                            .reset_index(name="Cantidad")
+                        )
+
+                        chart = (
+                            alt.Chart(grupo)
+                            .mark_bar()
+                            .encode(
+                                x=alt.X(f"{agrup}:N", title=agrup, axis=alt.Axis(labelAngle=-35)),
+                                y=alt.Y("Cantidad:Q", title="Cantidad de artículos"),
+                                color=alt.Color(
+                                    "ESTADO:N",
+                                    scale=alt.Scale(
+                                        domain=["YES", "NO", "Sin asignar"],
+                                        range=["#2ecc71", "#e74c3c", "#95a5a6"],
+                                    ),
+                                    legend=alt.Legend(title="MUNDO_AC"),
+                                ),
+                                xOffset="ESTADO:N",
+                                tooltip=[alt.Tooltip(f"{agrup}:N"), "ESTADO:N", "Cantidad:Q"],
+                            )
+                            .properties(title=f"Avance MUNDO_AC por {agrup}", height=420)
+                        )
+                        st.altair_chart(chart, use_container_width=True)
+
+                    st.divider()
+
+                    # ── DESCARGA ──────────────────────────────────────
+                    st.download_button(
+                        "⬇️ Descargar Excel para trabajar",
+                        data=a_excel(df_m),
+                        file_name=f"{ac_m}_MUNDO_AC.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_mundo",
+                    )
+
+                    st.divider()
+                    st.subheader("📤 Subir archivo con MUNDO_AC actualizado")
+                    st.caption(
+                        "El archivo debe contener **PK_Articulos** y la columna **MUNDO_AC** "
+                        "con valores **YES** o **NO**."
+                    )
+
+                    if "upload_key_mundo" not in st.session_state:
+                        st.session_state.upload_key_mundo = 0
+
+                    archivo_m = st.file_uploader(
+                        "Seleccione Excel trabajado (.xlsx)", type=["xlsx"],
+                        key=f"uploader_mundo_{st.session_state.upload_key_mundo}",
+                    )
+
+                    if archivo_m:
+                        try:
+                            preview_m = _leer_excel(archivo_m)
+                            # Advertir si MUNDO_AC tiene valores distintos de YES/NO
+                            if "MUNDO_AC" in preview_m.columns:
+                                vals_prev = (
+                                    preview_m["MUNDO_AC"]
+                                    .dropna()
+                                    .astype(str)
+                                    .str.strip()
+                                    .str.upper()
+                                )
+                                invalidos = vals_prev[~vals_prev.isin(["YES", "NO", ""])].unique().tolist()
+                                if invalidos:
+                                    st.warning(
+                                        f"⚠️ MUNDO_AC contiene valores no reconocidos: "
+                                        f"{invalidos[:5]}. Solo se aceptan **YES** o **NO**."
+                                    )
+                            st.caption(f"Vista previa: {len(preview_m):,} filas · {len(preview_m.columns)} columnas")
+                            st.dataframe(preview_m.head(5), use_container_width=True)
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                        else:
+                            if st.button("✅ Actualizar MUNDO_AC", key="btn_mundo"):
+                                try:
+                                    datos_m = _leer_excel(archivo_m)
+                                    if "MUNDO_AC" in datos_m.columns:
+                                        vals_m = (
+                                            datos_m["MUNDO_AC"]
+                                            .dropna()
+                                            .astype(str)
+                                            .str.strip()
+                                            .str.upper()
+                                        )
+                                        invalidos = vals_m[~vals_m.isin(["YES", "NO", ""])].unique().tolist()
+                                        if invalidos:
+                                            st.error(
+                                                f"❌ MUNDO_AC tiene valores inválidos: {invalidos[:5]}. "
+                                                "Corrija el archivo y vuelva a subirlo."
+                                            )
+                                        else:
+                                            datos_m["MUNDO_AC"] = (
+                                                datos_m["MUNDO_AC"]
+                                                .apply(lambda x: str(x).strip().upper()
+                                                       if pd.notna(x) and str(x).strip() else None)
+                                            )
+                                            submit_op(
+                                                "master_actualizar",
+                                                f"Actualizar MUNDO_AC en {ac_m} (MASTER)",
+                                                {"ac": ac_m, "datos": datos_m},
+                                            )
+                                            st.session_state.upload_key_mundo += 1
+                                            st.rerun()
+                                    else:
+                                        submit_op(
+                                            "master_actualizar",
+                                            f"Actualizar MUNDO_AC en {ac_m} (MASTER)",
+                                            {"ac": ac_m, "datos": datos_m},
+                                        )
+                                        st.session_state.upload_key_mundo += 1
+                                        st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ {e}")
 
