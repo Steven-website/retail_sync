@@ -439,47 +439,37 @@ def master_view():
                             .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
                         )
 
-                        grupo = (
-                            df_chart.groupby([agrup, "ESTADO"])
-                            .size()
-                            .reset_index(name="Cantidad")
-                        )
-                        totales = grupo.groupby(agrup)["Cantidad"].transform("sum")
-                        grupo["Pct"] = (grupo["Cantidad"] / totales * 100).round(1)
-                        grupo["Etiqueta"] = grupo.apply(
-                            lambda r: f"{r['Cantidad']:,} ({r['Pct']}%)", axis=1
-                        )
+                        # Avance por familia = (YES + NO) / Total
+                        resumen = df_chart.groupby(agrup)["ESTADO"].value_counts().unstack(fill_value=0)
+                        for col in ["YES", "NO", "Sin asignar"]:
+                            if col not in resumen.columns:
+                                resumen[col] = 0
+                        resumen["Total"] = resumen["YES"] + resumen["NO"] + resumen["Sin asignar"]
+                        resumen["Avance_Pct"] = ((resumen["YES"] + resumen["NO"]) / resumen["Total"] * 100).round(1)
+                        resumen["Asignados"] = resumen["YES"] + resumen["NO"]
+                        resumen = resumen.reset_index()
 
                         chart = (
-                            alt.Chart(grupo)
-                            .mark_bar()
+                            alt.Chart(resumen)
+                            .mark_bar(color="#4e9af1")
                             .encode(
                                 y=alt.Y(f"{agrup}:N", title=None, sort="-x"),
                                 x=alt.X(
-                                    "Pct:Q",
-                                    title="% de artículos",
+                                    "Avance_Pct:Q",
+                                    title="% Avance (YES + NO)",
                                     scale=alt.Scale(domain=[0, 100]),
                                     axis=alt.Axis(format=".0f", labelExpr="datum.value + '%'"),
                                 ),
-                                color=alt.Color(
-                                    "ESTADO:N",
-                                    scale=alt.Scale(
-                                        domain=["YES", "NO", "Sin asignar"],
-                                        range=["#2ecc71", "#e74c3c", "#95a5a6"],
-                                    ),
-                                    legend=alt.Legend(title="MUNDO_AC"),
-                                ),
-                                order=alt.Order("ESTADO:N", sort="ascending"),
                                 tooltip=[
                                     alt.Tooltip(f"{agrup}:N", title=agrup),
-                                    alt.Tooltip("ESTADO:N", title="Estado"),
-                                    alt.Tooltip("Cantidad:Q", title="Artículos", format=","),
-                                    alt.Tooltip("Pct:Q", title="%", format=".1f"),
+                                    alt.Tooltip("Asignados:Q", title="YES + NO", format=","),
+                                    alt.Tooltip("Total:Q", title="Total", format=","),
+                                    alt.Tooltip("Avance_Pct:Q", title="Avance %", format=".1f"),
                                 ],
                             )
                             .properties(
-                                title=f"% de avance MUNDO_AC por {agrup}",
-                                height=max(250, len(grupo[agrup].unique()) * 28),
+                                title="% Avance MUNDO_AC por Familia (YES + NO) / Total",
+                                height=max(250, len(resumen) * 28),
                             )
                         )
                         st.altair_chart(chart, use_container_width=True)
