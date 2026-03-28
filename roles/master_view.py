@@ -333,11 +333,14 @@ def master_view():
                     no_count  = (mundo_vals == "NO").sum()
                     sin_count = total - yes_count - no_count
 
-                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    avance_pct = round((yes_count + no_count) / total * 100, 1) if total > 0 else 0.0
+
+                    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
                     col_m1.metric("Total artículos", f"{total:,}")
                     col_m2.metric("✅ YES", f"{yes_count:,}")
                     col_m3.metric("❌ NO", f"{no_count:,}")
                     col_m4.metric("⬜ Sin asignar", f"{sin_count:,}")
+                    col_m5.metric("📈 Avance", f"{avance_pct}%")
 
                     # ── DESCARGA ──────────────────────────────────────
                     st.divider()
