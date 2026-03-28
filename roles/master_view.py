@@ -1,5 +1,4 @@
 import io
-import json
 import altair as alt
 import pandas as pd
 import streamlit as st
@@ -70,6 +69,25 @@ def _h_regenerar_todas(nombres):
 
 
 def master_view():
+    # ── NAVEGACIÓN SIDEBAR ────────────────────────────────
+    PAGINAS = [
+        "📂 BD",
+        "🗂️ Filtro AC",
+        "⚙️ Actividades",
+        "👥 Usuarios",
+        "🌍 Mundo AC",
+        "⬇️ Descargas",
+        "📋 Historial",
+    ]
+    with st.sidebar:
+        st.divider()
+        pagina = st.radio(
+            "Menú",
+            PAGINAS,
+            label_visibility="collapsed",
+            key="master_nav",
+        )
+
     st.header("👑 Panel MASTER")
 
     # ── MENSAJES DE COLA ───────────────────────────────────
@@ -97,13 +115,22 @@ def master_view():
     if completed:
         st.success("✔ Operación completada.")
 
-    # ── TABS ─────────────────────────────────────────────
-    tab_bd, tab_fac, tab_act, tab_usr, tab_mundo, tab_dl, tab_hist = st.tabs([
-        "📂 BD", "🗂️ Filtro AC", "⚙️ Actividades", "👥 Usuarios", "🌍 Mundo AC", "⬇️ Descargas", "📋 Historial"
-    ])
+    # ── BD ────────────────────────────────────────────────
+    if pagina == "📂 BD":
+        st.subheader("BD_ACTUALIZACION")
+        bd = leer_bd()
+        if not bd.empty:
+            st.success(f"✔ BD cargada — {len(bd):,} filas · {len(bd.columns)} columnas")
+        else:
+            st.warning("⚠️ No hay BD cargada. Suba un archivo .parquet para comenzar.")
+        archivo = st.file_uploader("Subir BD (.parquet)", type=["parquet"])
+        if archivo:
+            if st.button("💾 Guardar BD"):
+                submit_op("bd_subir", "Guardar BD_ACTUALIZACION", {"data_bytes": archivo.read()})
+                st.rerun()
 
-    # ── TAB FILTRO AC ───────────────────────────────────
-    with tab_fac:
+    # ── FILTRO AC ─────────────────────────────────────────
+    elif pagina == "🗂️ Filtro AC":
         st.subheader("Filtro por Actividad Comercial")
         st.caption("Seleccione la actividad y cargue su Excel con columnas: Familia · Categoría · Subcategoría")
 
@@ -122,7 +149,7 @@ def master_view():
                     data=a_excel(filtro_actual),
                     file_name=f"FILTRO_{ac_fac}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="dl_filtro"
+                    key="dl_filtro",
                 )
             else:
                 st.warning("⚠️ Esta actividad no tiene filtro. Se muestran todos los artículos.")
@@ -135,7 +162,7 @@ def master_view():
 
             archivo_fac = st.file_uploader(
                 "Seleccione Excel (.xlsx)", type=["xlsx"],
-                key=f"fac_uploader_{st.session_state.upload_key_fac}"
+                key=f"fac_uploader_{st.session_state.upload_key_fac}",
             )
             if archivo_fac:
                 try:
@@ -150,30 +177,19 @@ def master_view():
                         try:
                             archivo_fac.seek(0)
                             df_saved = subir_filtro_act(ac_fac, archivo_fac)
-                            hist.registrar(st.session_state.get("usuario", "?"),
-                                           "Subió Filtro AC", f"{ac_fac} — {len(df_saved):,} combinaciones")
+                            hist.registrar(
+                                st.session_state.get("usuario", "?"),
+                                "Subió Filtro AC",
+                                f"{ac_fac} — {len(df_saved):,} combinaciones",
+                            )
                             st.session_state.upload_key_fac += 1
                             st.success("✔ Filtro guardado correctamente.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ {e}")
 
-    # ── TAB BD ──────────────────────────────────────────
-    with tab_bd:
-        st.subheader("BD_ACTUALIZACION")
-        bd = leer_bd()
-        if not bd.empty:
-            st.success(f"✔ BD cargada — {len(bd):,} filas · {len(bd.columns)} columnas")
-        else:
-            st.warning("⚠️ No hay BD cargada. Suba un archivo .parquet para comenzar.")
-        archivo = st.file_uploader("Subir BD (.parquet)", type=["parquet"])
-        if archivo:
-            if st.button("💾 Guardar BD"):
-                submit_op("bd_subir", "Guardar BD_ACTUALIZACION", {"data_bytes": archivo.read()})
-                st.rerun()
-
-    # ── TAB ACTIVIDADES ─────────────────────────────────
-    with tab_act:
+    # ── ACTIVIDADES ───────────────────────────────────────
+    elif pagina == "⚙️ Actividades":
         st.subheader("Crear actividad comercial")
         nombre = st.text_input("Nombre de la actividad")
         if st.button("➕ Crear"):
@@ -190,9 +206,11 @@ def master_view():
         else:
             st.info(f"📋 {len(actividades)} actividad(es): {', '.join(actividades)}")
             if st.button("🔄 Regenerar TODAS las actividades"):
-                submit_op("actividad_regen_todas",
-                          f"Regenerar todas ({len(actividades)} actividades)",
-                          {"nombres": actividades})
+                submit_op(
+                    "actividad_regen_todas",
+                    f"Regenerar todas ({len(actividades)} actividades)",
+                    {"nombres": actividades},
+                )
                 st.rerun()
             st.caption("Regenerar actualiza todas las actividades con la BD actual, conservando los datos comerciales.")
             st.divider()
@@ -211,8 +229,8 @@ def master_view():
                         submit_op("actividad_eliminar", f"Eliminar actividad '{ac}'", {"nombre": ac})
                         st.rerun()
 
-    # ── TAB USUARIOS ───────────────────────────────────
-    with tab_usr:
+    # ── USUARIOS ──────────────────────────────────────────
+    elif pagina == "👥 Usuarios":
         usuarios = cargar_usuarios()
         st.subheader("Usuarios existentes")
         if not usuarios:
@@ -227,15 +245,21 @@ def master_view():
                 with st.expander(f"👤 {u['usuario']} — {u['rol']} — 🔑 {'•' * len(u.get('password', ''))}"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        nuevo_pwd = st.text_input("Nueva contraseña", key=f"pwd_{i}",
-                                                   placeholder="Dejar vacío para no cambiar")
-                        nuevo_rol = st.selectbox("Rol", ROLES_DISPONIBLES,
+                        nuevo_pwd = st.text_input(
+                            "Nueva contraseña", key=f"pwd_{i}",
+                            placeholder="Dejar vacío para no cambiar",
+                        )
+                        nuevo_rol = st.selectbox(
+                            "Rol", ROLES_DISPONIBLES,
                             index=ROLES_DISPONIBLES.index(u["rol"]) if u["rol"] in ROLES_DISPONIBLES else 0,
-                            key=f"rol_{i}")
+                            key=f"rol_{i}",
+                        )
                     with col2:
-                        nuevas_fam = st.multiselect("Familias", FAMILIAS_DISPONIBLES,
+                        nuevas_fam = st.multiselect(
+                            "Familias", FAMILIAS_DISPONIBLES,
                             default=[f for f in u.get("familias", []) if f in FAMILIAS_DISPONIBLES],
-                            key=f"fam_{i}")
+                            key=f"fam_{i}",
+                        )
                     c1, c2 = st.columns(2)
                     with c1:
                         if st.button("💾 Guardar", key=f"save_{i}"):
@@ -247,8 +271,9 @@ def master_view():
                                 if nuevo_pwd.strip():
                                     usuarios[i]["password"] = nuevo_pwd.strip()
                                 guardar_usuarios(usuarios)
-                                hist.registrar(st.session_state.get("usuario", "?"),
-                                               "Editó usuario", u["usuario"])
+                                hist.registrar(
+                                    st.session_state.get("usuario", "?"), "Editó usuario", u["usuario"]
+                                )
                                 st.success("✔ Cambios guardados.")
                                 st.rerun()
                     with c2:
@@ -256,8 +281,9 @@ def master_view():
                             if st.button("🗑️ Eliminar usuario", key=f"del_{i}"):
                                 usuarios.pop(i)
                                 guardar_usuarios(usuarios)
-                                hist.registrar(st.session_state.get("usuario", "?"),
-                                               "Eliminó usuario", u["usuario"])
+                                hist.registrar(
+                                    st.session_state.get("usuario", "?"), "Eliminó usuario", u["usuario"]
+                                )
                                 st.success("✔ Usuario eliminado.")
                                 st.rerun()
 
@@ -277,16 +303,17 @@ def master_view():
                 if any(u["usuario"].lower() == nu.strip().lower() for u in usuarios):
                     st.error("Ya existe un usuario con ese nombre.")
                 else:
-                    usuarios.append({"usuario": nu.strip(), "password": np_.strip(),
-                                     "rol": nr, "familias": nf})
+                    usuarios.append({
+                        "usuario": nu.strip(), "password": np_.strip(),
+                        "rol": nr, "familias": nf,
+                    })
                     guardar_usuarios(usuarios)
-                    hist.registrar(st.session_state.get("usuario", "?"),
-                                   "Creó usuario", nu.strip())
+                    hist.registrar(st.session_state.get("usuario", "?"), "Creó usuario", nu.strip())
                     st.success(f"✔ Usuario '{nu}' creado.")
                     st.rerun()
 
-    # ── TAB MUNDO AC ─────────────────────────────────
-    with tab_mundo:
+    # ── MUNDO AC ──────────────────────────────────────────
+    elif pagina == "🌍 Mundo AC":
         st.subheader("Gestión de MUNDO_AC por Actividad")
         st.caption("Sin restricciones de familia — el Master puede actualizar cualquier artículo.")
 
@@ -305,10 +332,10 @@ def master_view():
                 else:
                     # ── MÉTRICAS ─────────────────────────────────────
                     mundo_vals = df_m["MUNDO_AC"].fillna("").astype(str).str.strip().str.upper()
-                    total       = len(df_m)
-                    yes_count   = (mundo_vals == "YES").sum()
-                    no_count    = (mundo_vals == "NO").sum()
-                    sin_count   = total - yes_count - no_count
+                    total     = len(df_m)
+                    yes_count = (mundo_vals == "YES").sum()
+                    no_count  = (mundo_vals == "NO").sum()
+                    sin_count = total - yes_count - no_count
 
                     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                     col_m1.metric("Total artículos", f"{total:,}")
@@ -331,13 +358,11 @@ def master_view():
                             .str.upper()
                             .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
                         )
-
                         grupo = (
                             df_chart.groupby([agrup, "ESTADO"])
                             .size()
                             .reset_index(name="Cantidad")
                         )
-
                         chart = (
                             alt.Chart(grupo)
                             .mark_bar()
@@ -361,7 +386,6 @@ def master_view():
 
                     st.divider()
 
-                    # ── DESCARGA ──────────────────────────────────────
                     st.download_button(
                         "⬇️ Descargar Excel para trabajar",
                         data=a_excel(df_m),
@@ -388,14 +412,10 @@ def master_view():
                     if archivo_m:
                         try:
                             preview_m = _leer_excel(archivo_m)
-                            # Advertir si MUNDO_AC tiene valores distintos de YES/NO
                             if "MUNDO_AC" in preview_m.columns:
                                 vals_prev = (
                                     preview_m["MUNDO_AC"]
-                                    .dropna()
-                                    .astype(str)
-                                    .str.strip()
-                                    .str.upper()
+                                    .dropna().astype(str).str.strip().str.upper()
                                 )
                                 invalidos = vals_prev[~vals_prev.isin(["YES", "NO", ""])].unique().tolist()
                                 if invalidos:
@@ -414,10 +434,7 @@ def master_view():
                                     if "MUNDO_AC" in datos_m.columns:
                                         vals_m = (
                                             datos_m["MUNDO_AC"]
-                                            .dropna()
-                                            .astype(str)
-                                            .str.strip()
-                                            .str.upper()
+                                            .dropna().astype(str).str.strip().str.upper()
                                         )
                                         invalidos = vals_m[~vals_m.isin(["YES", "NO", ""])].unique().tolist()
                                         if invalidos:
@@ -426,10 +443,9 @@ def master_view():
                                                 "Corrija el archivo y vuelva a subirlo."
                                             )
                                         else:
-                                            datos_m["MUNDO_AC"] = (
-                                                datos_m["MUNDO_AC"]
-                                                .apply(lambda x: str(x).strip().upper()
-                                                       if pd.notna(x) and str(x).strip() else None)
+                                            datos_m["MUNDO_AC"] = datos_m["MUNDO_AC"].apply(
+                                                lambda x: str(x).strip().upper()
+                                                if pd.notna(x) and str(x).strip() else None
                                             )
                                             submit_op(
                                                 "master_actualizar",
@@ -449,8 +465,8 @@ def master_view():
                                 except Exception as e:
                                     st.error(f"❌ {e}")
 
-    # ── TAB DESCARGAS ──────────────────────────────────
-    with tab_dl:
+    # ── DESCARGAS ─────────────────────────────────────────
+    elif pagina == "⬇️ Descargas":
         st.subheader("Descargas en parquet")
         actividades = obtener_actividades()
         if actividades:
@@ -461,7 +477,7 @@ def master_view():
                 st.download_button(
                     "⬇️ Descargar actividad (.parquet)",
                     data=a_parquet(df_ac), file_name=f"{ac_dl}.parquet",
-                    mime="application/octet-stream", key="dl_ac"
+                    mime="application/octet-stream", key="dl_ac",
                 )
             st.divider()
         st.markdown("**BASE completa**")
@@ -470,13 +486,13 @@ def master_view():
             st.download_button(
                 "⬇️ Descargar BASE completa (.parquet)",
                 data=a_parquet(base), file_name="BASE_COMPLETA.parquet",
-                mime="application/octet-stream", key="dl_base"
+                mime="application/octet-stream", key="dl_base",
             )
         else:
             st.info("No hay BASE generada aún.")
 
-    # ── TAB HISTORIAL ─────────────────────────────────
-    with tab_hist:
+    # ── HISTORIAL ─────────────────────────────────────────
+    elif pagina == "📋 Historial":
         st.subheader("Historial de cambios")
         entradas = hist.leer_historial()
         if not entradas:
@@ -486,9 +502,7 @@ def master_view():
             df_h.columns = ["Fecha/Hora", "Usuario", "Acción", "Detalle"]
             df_h["_fecha"] = pd.to_datetime(df_h["Fecha/Hora"], errors="coerce").dt.date
 
-            # ── FILTROS ──────────────────────────────────────
             col_f1, col_f2, col_f3 = st.columns(3)
-
             with col_f1:
                 usuarios_hist = ["Todos"] + sorted(df_h["Usuario"].dropna().unique().tolist())
                 filtro_usr = st.selectbox("Filtrar por usuario", usuarios_hist, key="h_usr")
@@ -504,7 +518,6 @@ def master_view():
                 hasta = st.date_input("Hasta", value=fecha_max, min_value=fecha_min,
                                       max_value=fecha_max, key="h_hasta")
 
-            # ── APLICAR FILTROS ───────────────────────────────
             df_fil = df_h.copy()
             if filtro_usr != "Todos":
                 df_fil = df_fil[df_fil["Usuario"] == filtro_usr]
@@ -520,5 +533,5 @@ def master_view():
             st.download_button(
                 "⬇️ Descargar historial filtrado (.csv)",
                 data=df_mostrar.to_csv(index=False).encode("utf-8-sig"),
-                file_name="historial.csv", mime="text/csv"
+                file_name="historial.csv", mime="text/csv",
             )
