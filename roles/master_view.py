@@ -354,17 +354,30 @@ def master_view():
                             .str.upper()
                             .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
                         )
+
+                        # Calcular porcentajes por grupo
                         grupo = (
                             df_chart.groupby([agrup, "ESTADO"])
                             .size()
                             .reset_index(name="Cantidad")
                         )
+                        totales = grupo.groupby(agrup)["Cantidad"].transform("sum")
+                        grupo["Pct"] = (grupo["Cantidad"] / totales * 100).round(1)
+                        grupo["Etiqueta"] = grupo.apply(
+                            lambda r: f"{r['Cantidad']:,} ({r['Pct']}%)", axis=1
+                        )
+
                         chart = (
                             alt.Chart(grupo)
                             .mark_bar()
                             .encode(
-                                x=alt.X(f"{agrup}:N", title=agrup, axis=alt.Axis(labelAngle=-35)),
-                                y=alt.Y("Cantidad:Q", title="Cantidad de artículos"),
+                                y=alt.Y(f"{agrup}:N", title=None, sort="-x"),
+                                x=alt.X(
+                                    "Pct:Q",
+                                    title="% de artículos",
+                                    scale=alt.Scale(domain=[0, 100]),
+                                    axis=alt.Axis(format=".0f", labelExpr="datum.value + '%'"),
+                                ),
                                 color=alt.Color(
                                     "ESTADO:N",
                                     scale=alt.Scale(
@@ -373,10 +386,21 @@ def master_view():
                                     ),
                                     legend=alt.Legend(title="MUNDO_AC"),
                                 ),
-                                xOffset="ESTADO:N",
-                                tooltip=[alt.Tooltip(f"{agrup}:N"), "ESTADO:N", "Cantidad:Q"],
+                                order=alt.Order(
+                                    "ESTADO:N",
+                                    sort="ascending",
+                                ),
+                                tooltip=[
+                                    alt.Tooltip(f"{agrup}:N", title=agrup),
+                                    alt.Tooltip("ESTADO:N", title="Estado"),
+                                    alt.Tooltip("Cantidad:Q", title="Artículos", format=","),
+                                    alt.Tooltip("Pct:Q", title="%", format=".1f"),
+                                ],
                             )
-                            .properties(title=f"Avance MUNDO_AC por {agrup}", height=420)
+                            .properties(
+                                title=f"% de avance MUNDO_AC por {agrup}",
+                                height=max(250, len(grupo[agrup].unique()) * 28),
+                            )
                         )
                         st.altair_chart(chart, use_container_width=True)
 
