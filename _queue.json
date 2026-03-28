@@ -1,9 +1,4 @@
 {
-  "processing": {
-    "ticket": "0f1fd7f8",
-    "user": "admin",
-    "operation": "Actualizar MUNDO_AC en VERANO (MASTER)",
-    "since": "2026-03-28T18:32:26.118238+00:00"
-  },
+  "processing": null,
   "waiting": []
 }
