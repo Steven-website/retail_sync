@@ -424,9 +424,9 @@ def master_view():
                                 except Exception as e:
                                     st.error(f"❌ {e}")
 
-                    # ── GRÁFICO EN EXPANDER ───────────────────────────
+                    # ── TABLA DE AVANCE ───────────────────────────────
                     st.divider()
-                    with st.expander("📊 Ver gráfico de avance", expanded=False):
+                    with st.expander("📊 Ver avance por Familia", expanded=False):
                         agrup = "FAMILIA"
 
                         df_chart = df_m[[agrup, "MUNDO_AC"]].copy()
@@ -439,40 +439,28 @@ def master_view():
                             .apply(lambda x: "YES" if x == "YES" else ("NO" if x == "NO" else "Sin asignar"))
                         )
 
-                        # Avance por familia = (YES + NO) / Total
                         resumen = df_chart.groupby(agrup)["ESTADO"].value_counts().unstack(fill_value=0)
                         for col in ["YES", "NO", "Sin asignar"]:
                             if col not in resumen.columns:
                                 resumen[col] = 0
                         resumen["Total"] = resumen["YES"] + resumen["NO"] + resumen["Sin asignar"]
-                        resumen["Avance_Pct"] = ((resumen["YES"] + resumen["NO"]) / resumen["Total"] * 100).round(1)
-                        resumen["Asignados"] = resumen["YES"] + resumen["NO"]
-                        resumen = resumen.reset_index()
+                        resumen["% YES"]    = (resumen["YES"] / resumen["Total"] * 100).round(1)
+                        resumen["% NO"]     = (resumen["NO"]  / resumen["Total"] * 100).round(1)
+                        resumen["% Avance"] = (resumen["% YES"] + resumen["% NO"]).round(1)
+                        resumen = resumen.reset_index().sort_values("% Avance", ascending=False)
 
-                        chart = (
-                            alt.Chart(resumen)
-                            .mark_bar(color="#4e9af1")
-                            .encode(
-                                y=alt.Y(f"{agrup}:N", title=None, sort="-x"),
-                                x=alt.X(
-                                    "Avance_Pct:Q",
-                                    title="% Avance (YES + NO)",
-                                    scale=alt.Scale(domain=[0, 100]),
-                                    axis=alt.Axis(format=".0f", labelExpr="datum.value + '%'"),
-                                ),
-                                tooltip=[
-                                    alt.Tooltip(f"{agrup}:N", title=agrup),
-                                    alt.Tooltip("Asignados:Q", title="YES + NO", format=","),
-                                    alt.Tooltip("Total:Q", title="Total", format=","),
-                                    alt.Tooltip("Avance_Pct:Q", title="Avance %", format=".1f"),
-                                ],
-                            )
-                            .properties(
-                                title="% Avance MUNDO_AC por Familia (YES + NO) / Total",
-                                height=max(250, len(resumen) * 28),
-                            )
+                        tabla = resumen[[agrup, "YES", "NO", "Sin asignar", "Total", "% YES", "% NO", "% Avance"]].copy()
+                        tabla.columns = ["Familia", "YES", "NO", "Sin asignar", "Total", "% YES", "% NO", "% Avance"]
+
+                        st.dataframe(
+                            tabla.style.format({
+                                "YES": "{:,}", "NO": "{:,}",
+                                "Sin asignar": "{:,}", "Total": "{:,}",
+                                "% YES": "{:.1f}%", "% NO": "{:.1f}%", "% Avance": "{:.1f}%",
+                            }).background_gradient(subset=["% Avance"], cmap="Blues"),
+                            use_container_width=True,
+                            hide_index=True,
                         )
-                        st.altair_chart(chart, use_container_width=True)
 
     # ── DESCARGAS ─────────────────────────────────────────
     elif pagina == "⬇️ Descargas":
