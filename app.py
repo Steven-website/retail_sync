@@ -77,8 +77,16 @@ section[data-testid="stSidebar"] .logout-wrap button:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# ── SIDEBAR: información de usuario ──────────────────────────
+# ── SIDEBAR: usuario + logout (antes de vista para que siempre se renderice) ──
 sidebar_usuario()
+with st.sidebar:
+    st.markdown('<div class="sidebar-spacer"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="logout-wrap">', unsafe_allow_html=True)
+    if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ── CONTENIDO PRINCIPAL ───────────────────────────────────────
 st.title("🏬 Gestión de Actividades Comerciales")
@@ -97,13 +105,3 @@ if vista:
     vista()
 else:
     st.error("⚠️ Rol no reconocido.")
-
-# ── SIDEBAR: logout al fondo ──────────────────────────────────
-with st.sidebar:
-    st.markdown('<div class="sidebar-spacer"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="logout-wrap">', unsafe_allow_html=True)
-    if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
