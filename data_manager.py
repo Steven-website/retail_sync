@@ -110,7 +110,10 @@ def _leer_actividad(nombre: str) -> pd.DataFrame:
         raise Exception(f"Error leyendo actividad '{nombre}': {e}")
 
 def _limpiar_cache():
-    st.cache_data.clear()
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
 
 def _guardar_parquet_atomico(df: pd.DataFrame, ruta: str):
     """Escribe el parquet a un .tmp y luego hace rename atómico.
@@ -198,7 +201,6 @@ def subir_bd(file) -> pd.DataFrame:
 
 # ─── BASE (vista completa) ───────────────────────────────────────────────
 
-@st.cache_data(ttl=120)
 def leer_base() -> pd.DataFrame:
     """Concatena todas las actividades. Usar solo para descargas o vistas globales."""
     _asegurar_actividades()
