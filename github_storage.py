@@ -5,6 +5,7 @@ Cada vez que se guarda un parquet o usuarios.json, se hace commit al repo.
 import base64
 import io
 import os
+from typing import Optional
 import requests
 import streamlit as st
 
@@ -25,7 +26,7 @@ def _branch() -> str:
     return st.secrets.get("GITHUB_BRANCH", os.environ.get("GITHUB_BRANCH", "main"))
 
 
-def _get_sha(path: str) -> str | None:
+def _get_sha(path: str) -> Optional[str]:
     """Obtiene el SHA del archivo en GitHub (necesario para actualizarlo)."""
     url = f"https://api.github.com/repos/{_repo()}/contents/{path}"
     r = requests.get(url, headers=_headers(), params={"ref": _branch()})
