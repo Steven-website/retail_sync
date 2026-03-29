@@ -108,6 +108,18 @@ def _leer_actividad(nombre: str) -> pd.DataFrame:
     except Exception as e:
         raise Exception(f"Error leyendo actividad '{nombre}': {e}")
 
+def _guardar_parquet_atomico(df: pd.DataFrame, ruta: str):
+    """Escribe el parquet a un .tmp y luego hace rename atómico.
+    Si falla a mitad, el archivo original queda intacto."""
+    ruta_tmp = ruta + ".tmp"
+    try:
+        df.to_parquet(ruta_tmp, index=False)
+        os.replace(ruta_tmp, ruta)
+    except Exception:
+        if os.path.exists(ruta_tmp):
+            os.remove(ruta_tmp)
+        raise
+
 def _guardar_actividad(nombre: str, df: pd.DataFrame):
     """Guarda UNA actividad en su propio archivo y lo sube a GitHub."""
     os.makedirs(RUTA_ACTIVIDADES, exist_ok=True)
@@ -116,7 +128,7 @@ def _guardar_actividad(nombre: str, df: pd.DataFrame):
     df = _validar_pk(df)
     df[CAMPO_ACTIVIDAD] = nombre
     df[CAMPO_ACTIVIDAD] = df[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
-    df.to_parquet(_ruta_act(nombre), index=False)
+    _guardar_parquet_atomico(df, _ruta_act(nombre))
     push_parquet(df, _github_path_act(nombre), f"update actividad {nombre}")
 
 def _eliminar_actividad_archivo(nombre: str):
@@ -173,7 +185,7 @@ def subir_bd(file) -> pd.DataFrame:
         raise Exception(f"No se pudo leer el parquet: {e}")
     df = _validar_pk(df)
     df = df.drop_duplicates(subset=[PK], keep="last")
-    df.to_parquet(RUTA_BD, index=False)
+    _guardar_parquet_atomico(df, RUTA_BD)
     push_parquet(df, "data/BD_ACTUALIZACION.parquet", "update BD_ACTUALIZACION")
     return df
 
@@ -380,7 +392,7 @@ def subir_vm(file) -> pd.DataFrame:
         raise Exception(f"No se pudo leer el Excel: {e}")
     df.columns = df.columns.str.strip().str.replace('\ufeff', '', regex=False)
     df = df.dropna(how="all")
-    df.to_parquet(RUTA_VM, index=False)
+    _guardar_parquet_atomico(df, RUTA_VM)
     push_parquet(df, "data/VM_MERCHANDISING.parquet", "update VM_MERCHANDISING")
     return df
 
@@ -421,7 +433,7 @@ def subir_filtro_act(nombre: str, file) -> pd.DataFrame:
                         f"Encontradas: {list(df.columns)}")
     df = df[required].drop_duplicates()
     os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
-    df.to_parquet(_ruta_filtro_act(nombre), index=False)
+    _guardar_parquet_atomico(df, _ruta_filtro_act(nombre))
     push_parquet(df, _github_path_filtro_act(nombre), f"update filtro {nombre}")
     return df
 
@@ -487,7 +499,7 @@ def actualizar_vm_ac(nombre: str, archivo: pd.DataFrame) -> None:
 
     resultado = actual_idx.reset_index()
     os.makedirs(RUTA_VM_AC, exist_ok=True)
-    resultado.to_parquet(_ruta_vm_act(nombre), index=False)
+    _guardar_parquet_atomico(resultado, _ruta_vm_act(nombre))
     push_parquet(resultado, _github_path_vm_act(nombre), f"VM update {nombre}")
 
 def filtrar_por_ac(df: pd.DataFrame, actividad: str) -> pd.DataFrame:
