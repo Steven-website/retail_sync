@@ -510,7 +510,7 @@ def master_view():
             st.caption(f"{len(df_mostrar)} entrada(s) — más reciente primero")
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True, height=400)
             st.download_button(
-                "⬇️ Descargar historial filtrado (.xlsx)",
+                "⬇️ Descargar historial (.xlsx)",
                 data=a_excel(df_mostrar),
                 file_name="historial.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
