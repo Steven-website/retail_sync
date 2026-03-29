@@ -72,18 +72,21 @@ def _agregar_cols_comerciales(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = None
     return df
 
+@st.cache_data
 def a_csv(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     df.to_csv(buf, index=False, encoding="utf-8-sig")
     buf.seek(0)
     return buf.getvalue()
 
+@st.cache_data
 def a_excel(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     df.to_excel(buf, index=False, engine="openpyxl")
     buf.seek(0)
     return buf.getvalue()
 
+@st.cache_data
 def a_parquet(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     df.to_parquet(buf, index=False)
