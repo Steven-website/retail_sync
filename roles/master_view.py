@@ -438,11 +438,7 @@ def master_view():
                         tabla.columns = ["Familia", "YES", "NO", "Sin asignar", "Total", "% YES", "% NO", "% Avance"]
 
                         st.dataframe(
-                            tabla.style.format({
-                                "YES": "{:,}", "NO": "{:,}",
-                                "Sin asignar": "{:,}", "Total": "{:,}",
-                                "% YES": "{:.1f}%", "% NO": "{:.1f}%", "% Avance": "{:.1f}%",
-                            }).background_gradient(subset=["% Avance"], cmap="Blues"),
+                            tabla,
                             use_container_width=True,
                             hide_index=True,
                         )
