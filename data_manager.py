@@ -4,6 +4,7 @@ import re
 import unicodedata
 from typing import Optional, List
 import pandas as pd
+import streamlit as st
 from config import (
     RUTA_BD, RUTA_BASE, RUTA_ACTIVIDADES, RUTA_VM, RUTA_FILTROS_AC, RUTA_VM_AC, PK,
     CAMPO_ACTIVIDAD, CAMPO_FAMILIA,
@@ -108,6 +109,9 @@ def _leer_actividad(nombre: str) -> pd.DataFrame:
     except Exception as e:
         raise Exception(f"Error leyendo actividad '{nombre}': {e}")
 
+def _limpiar_cache():
+    st.cache_data.clear()
+
 def _guardar_parquet_atomico(df: pd.DataFrame, ruta: str):
     """Escribe el parquet a un .tmp y luego hace rename atómico.
     Si falla a mitad, el archivo original queda intacto."""
@@ -130,6 +134,7 @@ def _guardar_actividad(nombre: str, df: pd.DataFrame):
     df[CAMPO_ACTIVIDAD] = df[CAMPO_ACTIVIDAD].fillna("").astype(str).str.strip()
     _guardar_parquet_atomico(df, _ruta_act(nombre))
     push_parquet(df, _github_path_act(nombre), f"update actividad {nombre}")
+    _limpiar_cache()
 
 def _eliminar_actividad_archivo(nombre: str):
     """Elimina el archivo local y en GitHub de UNA actividad."""
@@ -172,6 +177,7 @@ def _asegurar_actividades():
 
 # ─── BD_ACTUALIZACION ──────────────────────────────────────────────────
 
+@st.cache_data(ttl=120)
 def leer_bd() -> pd.DataFrame:
     df = _leer_parquet(RUTA_BD)
     if df.empty:
@@ -187,10 +193,12 @@ def subir_bd(file) -> pd.DataFrame:
     df = df.drop_duplicates(subset=[PK], keep="last")
     _guardar_parquet_atomico(df, RUTA_BD)
     push_parquet(df, "data/BD_ACTUALIZACION.parquet", "update BD_ACTUALIZACION")
+    _limpiar_cache()
     return df
 
 # ─── BASE (vista completa) ───────────────────────────────────────────────
 
+@st.cache_data(ttl=120)
 def leer_base() -> pd.DataFrame:
     """Concatena todas las actividades. Usar solo para descargas o vistas globales."""
     _asegurar_actividades()
@@ -217,6 +225,7 @@ def leer_base() -> pd.DataFrame:
 
 # ─── ACTIVIDADES ─────────────────────────────────────────────────────
 
+@st.cache_data(ttl=120)
 def obtener_actividades() -> list:
     """Lista actividades leyendo sólo la primera fila de cada archivo."""
     _asegurar_actividades()
@@ -277,6 +286,7 @@ def eliminar_actividad(nombre: str):
     if nombre not in obtener_actividades():
         raise Exception(f"La actividad '{nombre}' no existe.")
     _eliminar_actividad_archivo(nombre)
+    _limpiar_cache()
 
 def regenerar_actividad(nombre: str) -> pd.DataFrame:
     nombre = nombre.strip()
@@ -301,6 +311,7 @@ def regenerar_actividad(nombre: str) -> pd.DataFrame:
     _guardar_actividad(nombre, nueva)
     return nueva
 
+@st.cache_data(ttl=120)
 def dataset_actividad(nombre: str) -> pd.DataFrame:
     """Lee datos de UNA actividad sin tocar las demás."""
     return _leer_actividad(nombre)
@@ -382,6 +393,7 @@ def actualizar_desde_csv(
 
 # ─── VISUAL MERCHANDISING ────────────────────────────────────────────
 
+@st.cache_data(ttl=120)
 def leer_vm() -> pd.DataFrame:
     return _leer_parquet(RUTA_VM)
 
@@ -394,6 +406,7 @@ def subir_vm(file) -> pd.DataFrame:
     df = df.dropna(how="all")
     _guardar_parquet_atomico(df, RUTA_VM)
     push_parquet(df, "data/VM_MERCHANDISING.parquet", "update VM_MERCHANDISING")
+    _limpiar_cache()
     return df
 
 
@@ -412,6 +425,7 @@ def _ruta_filtro_act(nombre: str) -> str:
 def _github_path_filtro_act(nombre: str) -> str:
     return f"data/filtros_ac/{_safe_name(nombre)}.parquet"
 
+@st.cache_data(ttl=120)
 def leer_filtro_act(nombre: str) -> pd.DataFrame:
     return _leer_parquet(_ruta_filtro_act(nombre))
 
@@ -435,6 +449,7 @@ def subir_filtro_act(nombre: str, file) -> pd.DataFrame:
     os.makedirs(RUTA_FILTROS_AC, exist_ok=True)
     _guardar_parquet_atomico(df, _ruta_filtro_act(nombre))
     push_parquet(df, _github_path_filtro_act(nombre), f"update filtro {nombre}")
+    _limpiar_cache()
     return df
 
 
@@ -455,6 +470,7 @@ def _ruta_vm_act(nombre: str) -> str:
 def _github_path_vm_act(nombre: str) -> str:
     return f"data/vm_ac/{_safe_name(nombre)}.parquet"
 
+@st.cache_data(ttl=120)
 def leer_vm_act(nombre: str) -> pd.DataFrame:
     """Carga datos VM de la actividad. Si no existe, inicializa desde el filtro con R01-R40 vacíos."""
     ruta = _ruta_vm_act(nombre)
@@ -501,6 +517,7 @@ def actualizar_vm_ac(nombre: str, archivo: pd.DataFrame) -> None:
     os.makedirs(RUTA_VM_AC, exist_ok=True)
     _guardar_parquet_atomico(resultado, _ruta_vm_act(nombre))
     push_parquet(resultado, _github_path_vm_act(nombre), f"VM update {nombre}")
+    _limpiar_cache()
 
 def filtrar_por_ac(df: pd.DataFrame, actividad: str) -> pd.DataFrame:
     """Filtra df con el filtro de la actividad (Familia/Categoría/Subcategoría).
