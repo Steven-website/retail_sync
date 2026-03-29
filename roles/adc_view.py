@@ -38,16 +38,6 @@ def adc_view():
         st.error("⚠️ No tiene familias asignadas. Contacte al administrador.")
         return
 
-    # ── NAVEGACIÓN SIDEBAR ────────────────────────────────
-    with st.sidebar:
-        st.divider()
-        pagina = st.radio(
-            "Menú",
-            ["📊 Ver datos", "📤 Subir archivo"],
-            label_visibility="collapsed",
-            key="adc_nav",
-        )
-
     st.header("🧑‍💻 Panel ADC")
 
     # ── MENSAJES DE COLA ─────────────────────────────────
@@ -90,49 +80,46 @@ def adc_view():
         st.warning("No hay artículos para sus familias en esta actividad.")
         return
 
-    # ── VER DATOS ─────────────────────────────────────────
-    if pagina == "📊 Ver datos":
-        st.caption(f"Registros de sus familias: {len(df_filtrado):,}")
-        st.dataframe(df_filtrado, use_container_width=True, height=450)
-        st.divider()
-        st.download_button(
-            "⬇️ Descargar Excel para trabajar",
-            data=a_excel(df_filtrado),
-            file_name=f"{ac}_ADC.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+    st.caption(f"Registros de sus familias: {len(df_filtrado):,}")
+    st.dataframe(df_filtrado, use_container_width=True, height=400)
+    st.divider()
+    st.download_button(
+        "⬇️ Descargar Excel para trabajar",
+        data=a_excel(df_filtrado),
+        file_name=f"{ac}_ADC.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
-    # ── SUBIR ARCHIVO ─────────────────────────────────────
-    elif pagina == "📤 Subir archivo":
-        st.subheader("📤 Subir archivo trabajado")
-        st.caption("Solo se actualizan sus familias. El resto permanece intacto.")
+    st.divider()
+    st.subheader("📤 Subir archivo trabajado")
+    st.caption("Solo se actualizan sus familias. El resto permanece intacto.")
 
-        if "upload_key" not in st.session_state:
-            st.session_state.upload_key = 0
+    if "upload_key" not in st.session_state:
+        st.session_state.upload_key = 0
 
-        archivo = st.file_uploader(
-            "Seleccione Excel trabajado", type=["xlsx"],
-            key=f"uploader_{st.session_state.upload_key}",
-        )
+    archivo = st.file_uploader(
+        "Seleccione Excel trabajado", type=["xlsx"],
+        key=f"uploader_{st.session_state.upload_key}",
+    )
 
-        if archivo:
+    if archivo:
+        try:
+            preview = _leer_archivo(archivo)
+            st.caption(f"Vista previa: {len(preview):,} filas · {len(preview.columns)} columnas")
+            st.dataframe(preview.head(5), use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ {e}")
+            return
+
+        if st.button("✅ Actualizar BASE"):
             try:
-                preview = _leer_archivo(archivo)
-                st.caption(f"Vista previa: {len(preview):,} filas · {len(preview.columns)} columnas")
-                st.dataframe(preview.head(5), use_container_width=True)
+                datos = _leer_archivo(archivo)
+                fam_label = ', '.join(familias[:3]) + ('...' if len(familias) > 3 else '')
+                submit_op(
+                    "actualizar_csv",
+                    f"Actualizar {ac} — familias: {fam_label}",
+                    {"ac": ac, "datos": datos, "familias": familias},
+                )
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ {e}")
-                return
-
-            if st.button("✅ Actualizar BASE"):
-                try:
-                    datos = _leer_archivo(archivo)
-                    fam_label = ', '.join(familias[:3]) + ('...' if len(familias) > 3 else '')
-                    submit_op(
-                        "actualizar_csv",
-                        f"Actualizar {ac} — familias: {fam_label}",
-                        {"ac": ac, "datos": datos, "familias": familias},
-                    )
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")

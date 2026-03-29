@@ -54,25 +54,6 @@ section[data-testid="stSidebar"] > div:first-child {
     line-height: 1.4;
 }
 
-/* ── Menú de navegación (radio) ── */
-section[data-testid="stSidebar"] [data-testid="stRadio"] > label {
-    display: none !important;
-}
-section[data-testid="stSidebar"] [data-testid="stRadio"] > div {
-    gap: 2px !important;
-}
-section[data-testid="stSidebar"] [data-testid="stRadio"] > div > label {
-    padding: 9px 14px !important;
-    border-radius: 8px !important;
-    font-size: 14px !important;
-    cursor: pointer !important;
-    transition: background 0.15s ease !important;
-    width: 100% !important;
-}
-section[data-testid="stSidebar"] [data-testid="stRadio"] > div > label:hover {
-    background: rgba(255, 255, 255, 0.07) !important;
-}
-
 /* ── Espaciador que empuja logout al fondo ── */
 .sidebar-spacer { flex: 1; }
 

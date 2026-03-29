@@ -69,25 +69,6 @@ def _h_regenerar_todas(nombres):
 
 
 def master_view():
-    # ── NAVEGACIÓN SIDEBAR ────────────────────────────────
-    PAGINAS = [
-        "📂 BD",
-        "🗂️ Filtro AC",
-        "⚙️ Actividades",
-        "👥 Usuarios",
-        "🌍 Mundo AC",
-        "⬇️ Descargas",
-        "📋 Historial",
-    ]
-    with st.sidebar:
-        st.divider()
-        pagina = st.radio(
-            "Menú",
-            PAGINAS,
-            label_visibility="collapsed",
-            key="master_nav",
-        )
-
     st.header("👑 Panel MASTER")
 
     # ── MENSAJES DE COLA ───────────────────────────────────
@@ -115,8 +96,12 @@ def master_view():
     if completed:
         st.success("✔ Operación completada.")
 
+    tab_bd, tab_fac, tab_act, tab_usr, tab_mundo, tab_dl, tab_hist = st.tabs([
+        "📂 BD", "🗂️ Filtro AC", "⚙️ Actividades", "👥 Usuarios", "🌍 Mundo AC", "⬇️ Descargas", "📋 Historial"
+    ])
+
     # ── BD ────────────────────────────────────────────────
-    if pagina == "📂 BD":
+    with tab_bd:
         st.subheader("BD_ACTUALIZACION")
         bd = leer_bd()
         if not bd.empty:
@@ -130,7 +115,7 @@ def master_view():
                 st.rerun()
 
     # ── FILTRO AC ─────────────────────────────────────────
-    elif pagina == "🗂️ Filtro AC":
+    with tab_fac:
         st.subheader("Filtro por Actividad Comercial")
         st.caption("Seleccione la actividad y cargue su Excel con columnas: Familia · Categoría · Subcategoría")
 
@@ -189,7 +174,7 @@ def master_view():
                             st.error(f"❌ {e}")
 
     # ── ACTIVIDADES ───────────────────────────────────────
-    elif pagina == "⚙️ Actividades":
+    with tab_act:
         st.subheader("Crear actividad comercial")
         nombre = st.text_input("Nombre de la actividad")
         if st.button("➕ Crear"):
@@ -230,7 +215,7 @@ def master_view():
                         st.rerun()
 
     # ── USUARIOS ──────────────────────────────────────────
-    elif pagina == "👥 Usuarios":
+    with tab_usr:
         usuarios = cargar_usuarios()
         st.subheader("Usuarios existentes")
         if not usuarios:
@@ -313,7 +298,7 @@ def master_view():
                     st.rerun()
 
     # ── MUNDO AC ──────────────────────────────────────────
-    elif pagina == "🌍 Mundo AC":
+    with tab_mundo:
         st.subheader("Gestión de MUNDO_AC por Actividad")
         st.caption("Sin restricciones de familia — el Master puede actualizar cualquier artículo.")
 
@@ -463,7 +448,7 @@ def master_view():
                         )
 
     # ── DESCARGAS ─────────────────────────────────────────
-    elif pagina == "⬇️ Descargas":
+    with tab_dl:
         st.subheader("Descargas en parquet")
         actividades = obtener_actividades()
         if actividades:
@@ -489,7 +474,7 @@ def master_view():
             st.info("No hay BASE generada aún.")
 
     # ── HISTORIAL ─────────────────────────────────────────
-    elif pagina == "📋 Historial":
+    with tab_hist:
         st.subheader("Historial de cambios")
         entradas = hist.leer_historial()
         if not entradas:
