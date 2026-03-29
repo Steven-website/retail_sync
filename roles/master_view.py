@@ -458,15 +458,18 @@ def master_view():
                 )
             st.divider()
         st.markdown("**BASE completa**")
-        base = leer_base()
-        if not base.empty:
+        if st.button("📦 Preparar BASE completa", key="btn_preparar_base"):
+            with st.spinner("Cargando todas las actividades..."):
+                st.session_state["_base_bytes"] = a_parquet(leer_base())
+        if st.session_state.get("_base_bytes"):
             st.download_button(
                 "⬇️ Descargar BASE completa (.parquet)",
-                data=a_parquet(base), file_name="BASE_COMPLETA.parquet",
+                data=st.session_state["_base_bytes"],
+                file_name="BASE_COMPLETA.parquet",
                 mime="application/octet-stream", key="dl_base",
             )
         else:
-            st.info("No hay BASE generada aún.")
+            st.caption("Haga clic en 'Preparar' para generar la descarga.")
 
     # ── HISTORIAL ─────────────────────────────────────────
     with tab_hist:
