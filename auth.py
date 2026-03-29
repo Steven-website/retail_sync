@@ -74,4 +74,5 @@ def sidebar_usuario():
 def cerrar_sesion():
     for k in SESSION_DEFAULTS.keys():
         st.session_state[k] = SESSION_DEFAULTS[k]
+    st.session_state.pop("confirmar_logout", None)
     st.rerun()

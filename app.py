@@ -102,16 +102,15 @@ else:
 with st.sidebar:
     st.markdown('<div class="sidebar-spacer"></div>', unsafe_allow_html=True)
     st.markdown('<div class="logout-wrap">', unsafe_allow_html=True)
-    if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
-        st.session_state["confirmar_logout"] = True
-    if st.session_state.get("confirmar_logout"):
+    if not st.session_state.get("confirmar_logout"):
+        if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
+            st.session_state["confirmar_logout"] = True
+            st.rerun()
+    else:
         st.warning("¿Seguro que desea cerrar sesión?")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("✅ Sí", use_container_width=True, key="logout_si"):
-                cerrar_sesion()
-        with col_b:
-            if st.button("❌ No", use_container_width=True, key="logout_no"):
-                st.session_state["confirmar_logout"] = False
-                st.rerun()
+        if st.button("✅ Sí, cerrar sesión", use_container_width=True, key="logout_si"):
+            cerrar_sesion()
+        if st.button("❌ No, continuar", use_container_width=True, key="logout_no"):
+            st.session_state["confirmar_logout"] = False
+            st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
