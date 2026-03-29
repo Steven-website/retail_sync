@@ -1,4 +1,5 @@
 import io
+from collections import Counter
 import pandas as pd
 import streamlit as st
 from auth import cargar_usuarios, guardar_usuarios
@@ -219,7 +220,6 @@ def master_view():
         if not usuarios:
             st.info("No hay usuarios.")
         else:
-            from collections import Counter
             conteo = Counter(u["rol"] for u in usuarios)
             cols = st.columns(len(conteo))
             for col, (rol, cantidad) in zip(cols, conteo.items()):

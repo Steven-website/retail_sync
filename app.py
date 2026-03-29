@@ -1,5 +1,5 @@
 import streamlit as st
-from auth import init_session, login_view, sidebar_usuario, cerrar_sesion
+from auth import init_session, login_view, sidebar_usuario
 from config import ROL_MASTER, ROL_ADC, ROL_VISUALIZADOR, ROL_VM
 from roles.master_view       import master_view
 from roles.adc_view          import adc_view
