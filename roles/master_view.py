@@ -8,8 +8,7 @@ from data_manager import (
     obtener_actividades,
     crear_actividad, eliminar_actividad, regenerar_actividad,
     dataset_actividad, a_excel, a_parquet,
-    actualizar_desde_csv,
-    leer_filtro_act, subir_filtro_act,
+    actualizar_desde_csv, leer_filtro_act, subir_filtro_act,
 )
 from queue_manager import handle_queue, submit_op
 import historial as hist
@@ -511,7 +510,8 @@ def master_view():
             st.caption(f"{len(df_mostrar)} entrada(s) — más reciente primero")
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True, height=400)
             st.download_button(
-                "⬇️ Descargar historial filtrado (.csv)",
-                data=df_mostrar.to_csv(index=False).encode("utf-8-sig"),
-                file_name="historial.csv", mime="text/csv",
+                "⬇️ Descargar historial filtrado (.xlsx)",
+                data=a_excel(df_mostrar),
+                file_name="historial.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
